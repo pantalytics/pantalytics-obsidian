@@ -14,7 +14,7 @@
 
 import * as Y from "yjs";
 
-import type { ConfigStore, ConfigTransport } from "../../src/knap/ConfigBinding";
+import type { ConfigBases, ConfigStore, ConfigTransport } from "../../src/knap/ConfigBinding";
 import { ConfigBinding } from "../../src/knap/ConfigBinding";
 import { TreeDoc } from "../../src/knap/TreeDoc";
 
@@ -123,6 +123,7 @@ async function device(
 	seed?: MemoryConfig,
 	/** True for a device making the link, which is the only one that adopts. */
 	linking = false,
+	bases: ConfigBases | null = null,
 ): Promise<Device> {
 	const config = seed ?? new MemoryConfig();
 	const refusals: { path: string; reason: string }[] = [];
@@ -136,6 +137,7 @@ async function device(
 		() => {
 			counted.n += 1;
 		},
+		bases,
 	);
 	await binding.start();
 	return {
@@ -489,5 +491,109 @@ describe("joining a cloud vault that already has settings", () => {
 		expect(restarted.config.files.has(".obsidian/plugins/templater/main.js")).toBe(true);
 		expect(first.config.files.has(".obsidian/plugins/templater/main.js")).toBe(true);
 		expect(restarted.adoptions).toBe(0);
+	});
+});
+
+/** What a device remembers between starts, in memory. */
+class MemoryBases implements ConfigBases {
+	saved = new Map<string, string>();
+	async load(): Promise<Map<string, string>> {
+		return new Map(this.saved);
+	}
+	async save(bases: Map<string, string>): Promise<void> {
+		this.saved = new Map(bases);
+	}
+}
+
+const ROSTER = ".obsidian/community-plugins.json";
+const THEME = ".obsidian/appearance.json";
+
+function json(content: ArrayBuffer | undefined): unknown {
+	return JSON.parse(textOf(content as ArrayBuffer));
+}
+
+describe("the plugin roster", () => {
+	// The bug of 2026-10-19: a roster from before anybody turned us on came
+	// down at every start, and Obsidian's next start did not load us (ADR-0106).
+	it("keeps us in a roster that arrives without us, and puts the cloud copy right", async () => {
+		const hub = new Hub();
+		const transport = new MemoryTransport();
+		const old = new MemoryConfig();
+		await old.put(ROSTER, '["dataview","synced-vaults"]');
+		const first = await device(hub, transport, old);
+		keep(first);
+		await settle(first);
+
+		const mac = new MemoryConfig();
+		await mac.put(ROSTER, '["pantalytics"]');
+		const second = await device(hub, transport, mac);
+		keep(second);
+		await settle(second, first);
+
+		const expected = ["dataview", "pantalytics"];
+		expect(json(second.config.files.get(ROSTER))).toEqual(expected);
+		expect(json(transport.stored.get(ROSTER))).toEqual(expected);
+		expect(json(first.config.files.get(ROSTER))).toEqual(expected);
+	});
+});
+
+describe("a start after time away", () => {
+	/** A device that has synced once, been quit, and is about to start again. */
+	async function quit(path: string, text: string) {
+		const hub = new Hub();
+		const transport = new MemoryTransport();
+		const bases = new MemoryBases();
+		const mac = new MemoryConfig();
+		await mac.put(path, text);
+		const before = await device(hub, transport, mac, false, bases);
+		const phone = await device(hub, transport);
+		keep(before, phone);
+		await settle(before, phone);
+		before.binding.stop();
+		const start = async () => {
+			const after = await device(hub, transport, mac, false, bases);
+			keep(after);
+			await settle(after, phone);
+		};
+		return { transport, mac, phone, start };
+	}
+
+	it("sends up a setting changed here while the plugin was not running", async () => {
+		const { mac, phone, start } = await quit(ROSTER, '["pantalytics"]');
+		// Obsidian, before we load: somebody turned Dataview on.
+		mac.files.set(ROSTER, bytes('["pantalytics","dataview"]'));
+		await start();
+
+		expect(json(mac.files.get(ROSTER))).toEqual(["pantalytics", "dataview"]);
+		expect(json(phone.config.files.get(ROSTER))).toEqual(["pantalytics", "dataview"]);
+	});
+
+	it("still takes what changed in the cloud vault while it was away", async () => {
+		const { mac, phone, start } = await quit(THEME, '{"accentColor":"#ff0055"}');
+		await phone.config.put(THEME, '{"accentColor":"#00ff00"}');
+		await settle(phone);
+		await start();
+
+		expect(textOf(mac.files.get(THEME) as ArrayBuffer)).toBe('{"accentColor":"#00ff00"}');
+	});
+
+	it("lets the cloud vault win when both sides changed", async () => {
+		const { mac, phone, start } = await quit(THEME, '{"accentColor":"#ff0055"}');
+		await phone.config.put(THEME, '{"accentColor":"#00ff00"}');
+		await settle(phone);
+		mac.files.set(THEME, bytes('{"accentColor":"#0000ff"}'));
+		await start();
+
+		expect(textOf(mac.files.get(THEME) as ArrayBuffer)).toBe('{"accentColor":"#00ff00"}');
+	});
+
+	it("removes from the cloud vault a snippet deleted here while away", async () => {
+		const snippet = ".obsidian/snippets/wide.css";
+		const { transport, mac, phone, start } = await quit(snippet, "body{}");
+		mac.files.delete(snippet);
+		await start();
+
+		expect(transport.stored.has(snippet)).toBe(false);
+		expect(phone.config.files.has(snippet)).toBe(false);
 	});
 });

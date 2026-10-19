@@ -14,6 +14,7 @@ import {
 	isUnderConfigDir,
 	manifestLast,
 	pluginFolderOf,
+	withOurselves,
 } from "../../src/knap/configPaths";
 
 describe("what settings sync carries", () => {
@@ -125,5 +126,28 @@ describe("the order a plugin folder is written in", () => {
 	it("leaves a list with no manifest in it alone", () => {
 		const paths = [".obsidian/appearance.json", ".obsidian/hotkeys.json"];
 		expect(manifestLast(paths)).toEqual(paths);
+	});
+});
+
+describe("withOurselves", () => {
+	const enc = (text: string) => new TextEncoder().encode(text).buffer as ArrayBuffer;
+	const dec = (content: ArrayBuffer) => new TextDecoder().decode(content);
+	const roster = ".obsidian/community-plugins.json";
+
+	it("adds us to the roster and drops the old id", () => {
+		const out = withOurselves(roster, enc('["synced-vaults","dataview"]'));
+		expect(JSON.parse(dec(out))).toEqual(["dataview", "pantalytics"]);
+	});
+
+	it("leaves a roster that already has us untouched, byte for byte", () => {
+		const content = enc('["pantalytics"]');
+		expect(withOurselves(roster, content)).toBe(content);
+	});
+
+	it("leaves every other file, and a roster it cannot read, alone", () => {
+		const theme = enc("{}");
+		const broken = enc("not json");
+		expect(withOurselves(".obsidian/appearance.json", theme)).toBe(theme);
+		expect(withOurselves(roster, broken)).toBe(broken);
 	});
 });

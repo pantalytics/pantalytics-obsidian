@@ -143,3 +143,32 @@ export function manifestLast(paths: string[]): string[] {
 	const rest = paths.filter((path) => !path.endsWith("/manifest.json"));
 	return [...rest, ...manifests];
 }
+
+/** The roster of enabled community plugins, which travels like any setting. */
+export const PLUGIN_LIST = `${CONFIG_DIR}/community-plugins.json`;
+
+/**
+ * The roster as this device should hold it: with us in it, and without the id
+ * we had before (ADR-0106).
+ *
+ * The roster is the one shared file that can switch this plugin off. A copy
+ * from a device that ran the old id, or from before anybody here turned us on,
+ * lands without `pantalytics`, and Obsidian's next start reads it and does not
+ * load the plugin that put it there. A device that syncs through us has us on,
+ * by definition, so every roster written here says so. Anything that is not
+ * the roster, or not a list, passes through untouched.
+ */
+export function withOurselves(path: string, content: ArrayBuffer): ArrayBuffer {
+	if (normalize(path) !== PLUGIN_LIST) return content;
+	let list: unknown;
+	try {
+		list = JSON.parse(new TextDecoder().decode(content));
+	} catch {
+		return content;
+	}
+	if (!Array.isArray(list)) return content;
+	const kept = list.filter((id) => id !== LEGACY_PLUGIN_ID);
+	if (!kept.includes(PLUGIN_ID)) kept.push(PLUGIN_ID);
+	if (kept.length === list.length && kept.every((id, i) => id === list[i])) return content;
+	return new TextEncoder().encode(JSON.stringify(kept, null, 2)).buffer as ArrayBuffer;
+}

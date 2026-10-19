@@ -33,7 +33,7 @@ import type { LinkChooser, LinkDiff } from "./linkSteps";
 import { diffSides, isMerge, linkCounts, mergeRefusal, needsChoice, removalsFor } from "./linkSteps";
 import type { AttachmentTransport, Refusal } from "./AttachmentBinding";
 import { AttachmentBinding } from "./AttachmentBinding";
-import type { ConfigStore } from "./ConfigBinding";
+import type { ConfigBases, ConfigStore } from "./ConfigBinding";
 import { ConfigBinding } from "./ConfigBinding";
 import type { LiveNoteHandle } from "./knapEditor";
 import { conflictLabelFor, personLabel } from "./person";
@@ -158,6 +158,8 @@ export interface KnapSyncOptions {
 	onRefused?: Refusal;
 	/** Where this device remembers a cloud vault's tree, if anywhere. */
 	makeSeen?: (cloudVaultId: string) => SeenTree;
+	/** Where this device remembers which settings it last agreed with, if anywhere. */
+	makeConfigBases?: (cloudVaultId: string) => ConfigBases;
 	/**
 	 * Obsidian's own settings directory, when this host has one.
 	 *
@@ -649,6 +651,7 @@ export class KnapSync {
 						// start, and this is the flag that survives the quit.
 						stored.settingsInitialized === false,
 						() => this.options.onAdopted?.(stored.cloudVaultName),
+						this.options.makeConfigBases?.(stored.cloudVaultId) ?? null,
 					)
 				: null;
 		// Set before the screen is told, so a status read on the back of that

@@ -26,6 +26,7 @@ import type { ServerNotice } from "./notices";
 import { knapLiveEditing } from "./knapEditor";
 import { KnapSync } from "./KnapSync";
 import type { KnapLink } from "./KnapSync";
+import { ObsidianConfigBases } from "./ObsidianConfigBases";
 import { ObsidianConfigStore } from "./ObsidianConfigStore";
 import { ObsidianFileStore } from "./ObsidianFileStore";
 import { ObsidianSeenTree } from "./ObsidianSeenTree";
@@ -211,6 +212,12 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 			new ObsidianSeenTree(
 				host.app.vault.adapter,
 				`${host.app.vault.configDir}/plugins/${host.manifest.id}/knap-seen.json`,
+				cloudVaultId,
+			),
+		makeConfigBases: (cloudVaultId) =>
+			new ObsidianConfigBases(
+				host.app.vault.adapter,
+				`${host.app.vault.configDir}/plugins/${host.manifest.id}/knap-config-seen.json`,
 				cloudVaultId,
 			),
 	});
