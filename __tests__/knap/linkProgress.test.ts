@@ -98,6 +98,9 @@ describe("linking says what it is doing", () => {
 			localAttachments: 0,
 			differentNotes: 0,
 			differentAttachments: 0,
+			// The comparison's split of the notes (ADR-0107).
+			onlyCloudNotes: 2,
+			onlyLocalNotes: 0,
 			// Everything up there is up there and not here, the photo too.
 			downloadNotes: 2,
 			downloadAttachments: 1,
@@ -108,6 +111,22 @@ describe("linking says what it is doing", () => {
 		expect(held()?.cloudVaultId).toBe("v1");
 		expect(held()?.initialized).toBe(false);
 
+		sync.stop();
+	});
+
+	// Settings ride in the attachment map, and they are neither what a person
+	// counts as attachments nor something the notes choice may delete.
+	it("leaves the cloud vault's settings out of its attachments", async () => {
+		const network = new FakeNetwork();
+		fillCloud(network, "v1", ["Cloud/a.md"], ["Cloud/photo.png", ".obsidian/app.json"]);
+		const { sync } = syncOver(network, new MemoryFiles(), {
+			token: "knap_abc",
+			cloudVaultId: "",
+			cloudVaultName: "",
+		});
+		const seen: LinkFacts[] = [];
+		await sync.link({ id: "v1", name: "Work notes" }, (_step, facts) => seen.push({ ...facts }));
+		expect(seen[seen.length - 1].cloudAttachments).toBe(1);
 		sync.stop();
 	});
 

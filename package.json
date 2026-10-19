@@ -1,6 +1,6 @@
 {
 	"name": "pantalytics",
-	"version": "1.13.48",
+	"version": "1.13.49",
 	"description": "Sync your whole vault with your Pantalytics workspace, on desktop and phone, and edit together in real time.",
 	"main": "main.js",
 	"scripts": {

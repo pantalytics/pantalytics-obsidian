@@ -6,7 +6,9 @@
  */
 
 import type { ConfigStore } from "../../src/knap/ConfigBinding";
-import { KnapSync, type KnapLink } from "../../src/knap/KnapSync";
+import { KnapSync, LINK_CANCELLED, type KnapLink } from "../../src/knap/KnapSync";
+import type { SettingsLoss } from "../../src/knap/linkCompare";
+import { TREE_DOC_ID, TreeDoc } from "../../src/knap/TreeDoc";
 import { FakeNetwork, MemoryFiles } from "../mocks/fakeNetwork";
 
 class MemoryConfig implements ConfigStore {
@@ -95,5 +97,59 @@ describe("the vault's Sync settings switch", () => {
 	it("reads an answer it could not get as off", async () => {
 		const { uploads } = await linkWith("unreachable");
 		expect(uploads).toEqual([]);
+	});
+});
+
+describe("linking to a cloud vault whose settings replace this device's (ADR-0107)", () => {
+	jest.setTimeout(30_000);
+	process.setMaxListeners(0);
+
+	async function linkAsking(answer: boolean) {
+		const { fetchFn, uploads } = server(true);
+		const network = new FakeNetwork();
+		const tree = new TreeDoc(network.doc(`/sync/v1/${TREE_DOC_ID}`));
+		tree.setAttachment(".obsidian/plugins/dataview/main.js", { hash: "abc", size: 1 });
+		const config = new MemoryConfig();
+		config.files.set(
+			".obsidian/plugins/templater/main.js",
+			new TextEncoder().encode("// mine").buffer,
+		);
+		let held: KnapLink | null = { token: "knap_abc", cloudVaultId: "", cloudVaultName: "" };
+		const sync = new KnapSync({
+			serverUrl: "https://knap.test",
+			deviceName: "Laptop",
+			fetchFn,
+			files: new MemoryFiles(),
+			config,
+			load: () => held,
+			save: async (value) => {
+				held = value;
+			},
+			webSocket: network.socket,
+		});
+		const asked: SettingsLoss[] = [];
+		const linking = sync.link({ id: "v1", name: "Work notes" }, undefined, undefined, async (loss) => {
+			asked.push(loss);
+			return answer;
+		});
+		return { linking, asked, config, uploads, held: () => held, sync };
+	}
+
+	it("asks first, naming the plugin that would go", async () => {
+		const { linking, asked, sync } = await linkAsking(true);
+		await linking;
+		expect(asked).toHaveLength(1);
+		expect(asked[0].plugins).toEqual(["templater"]);
+		expect(asked[0].added).toEqual(["dataview"]);
+		sync.stop();
+	});
+
+	it("a cancel writes nothing and leaves the link off", async () => {
+		const { linking, config, uploads, held, sync } = await linkAsking(false);
+		await expect(linking).rejects.toThrow(LINK_CANCELLED);
+		expect(config.files.has(".obsidian/plugins/templater/main.js")).toBe(true);
+		expect(uploads).toEqual([]);
+		expect(held()?.cloudVaultId).toBe("");
+		sync.stop();
 	});
 });

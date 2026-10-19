@@ -245,7 +245,17 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 					// what the person watches from here. It reports each step,
 					// closes itself when the link is made, and stays up with
 					// the failing step marked when one is not.
-					const progress = new LinkProgressModal(host.app, vault.name);
+					// Installed plugins by name, for the settings question.
+					const manifests = (
+						host.app as unknown as {
+							plugins?: { manifests?: Record<string, { name?: string }> };
+						}
+					).plugins?.manifests;
+					const progress = new LinkProgressModal(
+						host.app,
+						vault.name,
+						(id) => manifests?.[id]?.name ?? id,
+					);
 					progress.open();
 					let settled = false;
 					sync
@@ -268,6 +278,7 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 								}
 							},
 							(diff) => progress.choose(diff),
+							(loss) => progress.confirmSettings(loss),
 						)
 						.catch((error: Error) => {
 							// The modal is where this is read, so it is not
