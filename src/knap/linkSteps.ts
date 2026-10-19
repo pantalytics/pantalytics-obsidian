@@ -50,6 +50,12 @@ export interface LinkFacts {
 	downloadAttachments?: number;
 	uploadNotes?: number;
 	uploadAttachments?: number;
+	/** Notes on one side only, from the comparison a link makes. */
+	onlyCloudNotes?: number;
+	onlyLocalNotes?: number;
+	/** Plugin folders on each side, where this host has settings. */
+	cloudPlugins?: number;
+	localPlugins?: number;
 }
 
 /** Told each time a step is done, with everything known at that point. */

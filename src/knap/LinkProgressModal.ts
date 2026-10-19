@@ -28,6 +28,11 @@ import { Menu, Modal, setIcon, type App } from "obsidian";
 
 import type { LinkChoice, LinkDiff, LinkFacts, LinkRow, LinkStep } from "./linkSteps";
 import { BOTH_WAYS, KEEP_BOTH_SAY, choiceSay, linkRows, replaceConfirm } from "./linkSteps";
+import type { Side, SideBySide, SettingsLoss } from "./linkCompare";
+import { USE_CLOUD_SETTINGS, barSegments, settingsAsk, sideBySide } from "./linkCompare";
+
+/** The four count rows the comparison replaces once it can be drawn. */
+const COUNTED: LinkStep[] = ["cloudNotes", "cloudAttachments", "localNotes", "localAttachments"];
 
 /** How long the finished list stays up, so the last line can be read. */
 const CLOSE_AFTER_MS = 900;
@@ -40,10 +45,13 @@ export class LinkProgressModal extends Modal {
 	private failed = false;
 	private closing: number | null = null;
 	private choosing: ((choice: LinkChoice | null) => void) | null = null;
+	private confirming: ((go: boolean) => void) | null = null;
 
 	constructor(
 		app: App,
 		private readonly vaultName: string,
+		/** A plugin's name from its id, where this device knows it. */
+		private readonly pluginName: (id: string) => string = (id) => id,
 	) {
 		super(app);
 	}
@@ -63,6 +71,7 @@ export class LinkProgressModal extends Modal {
 	onClose(): void {
 		// Closing the modal while it asks is a cancel.
 		this.answer(null);
+		this.settle(false);
 		if (this.closing !== null) window.clearTimeout(this.closing);
 		this.closing = null;
 		this.rowsEl = null;
@@ -103,6 +112,39 @@ export class LinkProgressModal extends Modal {
 			this.paint();
 			this.paintChoice(diff);
 		});
+	}
+
+	/**
+	 * The cloud vault's settings would replace this device's own (ADR-0107).
+	 * Named, before anything is written. Cancel, or go ahead with the cloud
+	 * vault's; there is no third way that sends this device's settings up.
+	 */
+	confirmSettings(loss: SettingsLoss): Promise<boolean> {
+		return new Promise((resolve) => {
+			this.confirming = resolve;
+			this.paint();
+			const note = this.noteEl;
+			if (!note) return;
+			const ask = settingsAsk(this.vaultName, loss, this.pluginName);
+			note.empty();
+			note.createEl("h3", { cls: "knap-link-confirm", text: ask.title });
+			note.createDiv({ cls: "knap-link-say", text: ask.body });
+			if (ask.removed) note.createDiv({ cls: "knap-link-say knap-link-removed", text: ask.removed });
+			if (ask.added) note.createDiv({ cls: "knap-link-say", text: ask.added });
+			const buttons = note.createDiv({ cls: "knap-modal-buttons" });
+			buttons.createEl("button", { text: "Cancel" }).onclick = () => this.close();
+			const go = buttons.createEl("button", { cls: "mod-warning", text: USE_CLOUD_SETTINGS });
+			go.onclick = () => this.settle(true);
+		});
+	}
+
+	private settle(go: boolean): void {
+		const resolve = this.confirming;
+		if (!resolve) return;
+		this.confirming = null;
+		this.noteEl?.empty();
+		this.paint();
+		resolve(go);
 	}
 
 	private answer(choice: LinkChoice | null): void {
@@ -158,7 +200,15 @@ export class LinkProgressModal extends Modal {
 		const rows = this.rowsEl;
 		if (!rows) return;
 		rows.empty();
-		for (const row of linkRows(this.done, this.facts, this.failed, this.choosing !== null)) {
+		const paused = this.choosing !== null || this.confirming !== null;
+		const picture = sideBySide(this.facts);
+		for (const row of linkRows(this.done, this.facts, this.failed, paused)) {
+			// Once both sides are counted and compared, the two columns say
+			// what the four count rows did, and say it at a glance.
+			if (picture && COUNTED.includes(row.step)) {
+				if (row.step === "cloudNotes") this.drawPicture(rows, picture);
+				continue;
+			}
 			this.drawRow(rows, row);
 		}
 		const note = this.noteEl;
@@ -171,6 +221,42 @@ export class LinkProgressModal extends Modal {
 				text: "Nothing was changed. Your notes are all still on this device.",
 			});
 		}
+	}
+
+	/** The two sides next to each other, and the notes as one bar. */
+	private drawPicture(parent: HTMLElement, picture: SideBySide): void {
+		const box = parent.createDiv({ cls: "knap-link-picture" });
+		const columns = box.createDiv({ cls: "knap-link-sides" });
+		this.drawSide(columns, "Cloud vault", picture.cloud);
+		this.drawSide(columns, "This device", picture.local);
+		const segments = barSegments(picture.bar);
+		if (segments.length === 0) return;
+		const bar = box.createDiv({ cls: "knap-link-bar", attr: { role: "img" } });
+		bar.setAttr(
+			"aria-label",
+			segments.map((segment) => `${segment.label}: ${segment.count}`).join(", "),
+		);
+		const legend = box.createDiv({ cls: "knap-link-legend" });
+		for (const segment of segments) {
+			const part = bar.createDiv({ cls: `knap-link-seg knap-link-seg-${segment.key}` });
+			part.style.flexGrow = String(segment.count);
+			const key = legend.createSpan({ cls: "knap-link-key" });
+			key.createSpan({ cls: `knap-link-swatch knap-link-seg-${segment.key}` });
+			key.createSpan({ text: `${segment.label} ${segment.count.toLocaleString("en-US")}` });
+		}
+	}
+
+	private drawSide(parent: HTMLElement, title: string, side: Side): void {
+		const column = parent.createDiv({ cls: "knap-link-side" });
+		column.createDiv({ cls: "knap-link-side-title", text: title });
+		const line = (label: string, count: number) => {
+			const row = column.createDiv({ cls: "knap-link-side-row" });
+			row.createSpan({ text: label });
+			row.createSpan({ cls: "knap-link-value", text: count.toLocaleString("en-US") });
+		};
+		line("Notes", side.notes);
+		line("Attachments", side.attachments);
+		if (side.plugins !== undefined) line("Plugins", side.plugins);
 	}
 
 	private drawRow(parent: HTMLElement, row: LinkRow): void {

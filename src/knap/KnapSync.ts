@@ -31,6 +31,9 @@ import { TREE_SYNC_FAILED, TREE_SYNC_TIMEOUT_MS, withTimeout } from "./deadline"
 import type { LinkFacts, LinkReporter } from "./linkSteps";
 import type { LinkChooser, LinkDiff } from "./linkSteps";
 import { diffSides, isMerge, linkCounts, mergeRefusal, needsChoice, removalsFor } from "./linkSteps";
+import type { SettingsLoss } from "./linkCompare";
+import { hasHotkeys, pluginCount, settingsLoss } from "./linkCompare";
+import { CONFIG_DIR, isSyncedConfig } from "./configPaths";
 import type { AttachmentTransport, Refusal } from "./AttachmentBinding";
 import { AttachmentBinding } from "./AttachmentBinding";
 import type { ConfigBases, ConfigStore } from "./ConfigBinding";
@@ -39,7 +42,7 @@ import type { LiveNoteHandle } from "./knapEditor";
 import { conflictLabelFor, personLabel } from "./person";
 import { generateHash } from "../hashing";
 import type { TreeDoc } from "./TreeDoc";
-import { normalize } from "./TreeDoc";
+import { isHidden, normalize } from "./TreeDoc";
 import type { FileStore, Pass, SeenTree } from "./VaultBinding";
 import { VaultBinding } from "./VaultBinding";
 import type { CloudVault, Fetch } from "./KnapServer";
@@ -52,6 +55,12 @@ import { SignInFlow } from "./SignInFlow";
 
 /** What a link rejects with when the person cancelled the choice. */
 export const LINK_CANCELLED = "Nothing was linked.";
+
+/**
+ * Asked when a link would replace this device's own settings with the cloud
+ * vault's (ADR-0107). True goes ahead; false is a cancel.
+ */
+export type SettingsConfirm = (loss: SettingsLoss) => Promise<boolean>;
 
 export interface KnapLink {
 	token: string;
@@ -373,7 +382,12 @@ export class KnapSync {
 	 * because the command palette links too, and a notice is all that entry
 	 * point has room for.
 	 */
-	async link(vault: CloudVault, report?: LinkReporter, choose?: LinkChooser): Promise<void> {
+	async link(
+		vault: CloudVault,
+		report?: LinkReporter,
+		choose?: LinkChooser,
+		confirmSettings?: SettingsConfirm,
+	): Promise<void> {
 		const stored = this.options.load();
 		if (!stored?.token) {
 			throw new Error("Sign in first.");
@@ -400,7 +414,7 @@ export class KnapSync {
 		// this is the only moment comparing the two sides means anything.
 		// Every later start runs over a link that was already allowed, and
 		// by then both sides hold the same notes on purpose (ADR-0098).
-		await this.start(report, true, choose);
+		await this.start(report, true, choose, confirmSettings);
 	}
 
 	/** End the link. Stops the syncing, deletes nothing on either side. */
@@ -473,7 +487,9 @@ export class KnapSync {
 			cloud.set(normalize(path), tree.hashFor(docId));
 			notes.add(normalize(path));
 		}
-		for (const [path, entry] of tree.attachments()) cloud.set(normalize(path), entry.hash);
+		for (const [path, entry] of tree.attachments()) {
+			if (!isHidden(path)) cloud.set(normalize(path), entry.hash);
+		}
 		const { files } = this.options;
 		return diffSides(cloud, [...localNotes, ...localAttachments], notes, async (path) => {
 			if (notes.has(path)) {
@@ -485,6 +501,31 @@ export class KnapSync {
 		});
 	}
 
+	/**
+	 * Both sides' settings, for the comparison and the question (ADR-0107).
+	 * Null without a config directory. `adopting` is whether this pass takes
+	 * the cloud vault's settings, which is the only time anything is lost.
+	 */
+	private async settingsPicture(
+		tree: TreeDoc,
+		adopting: boolean,
+	): Promise<{ cloudPlugins: number; localPlugins: number; loss: SettingsLoss | null } | null> {
+		const config = this.options.config;
+		if (!config) return null;
+		const cloud = [...tree.attachments().keys()].filter((path) => isSyncedConfig(path));
+		const local = (await config.list()).filter((path) => isSyncedConfig(path));
+		let loss: SettingsLoss | null = null;
+		if (adopting) {
+			const hotkeys = `${CONFIG_DIR}/hotkeys.json`;
+			const bytes = await config.read(hotkeys);
+			const text = bytes === null ? null : new TextDecoder().decode(bytes);
+			const theirs = tree.attachmentFor(hotkeys)?.hash;
+			const ours = bytes === null ? null : await generateHash(bytes);
+			loss = settingsLoss(cloud, local, hasHotkeys(text) && ours !== theirs);
+		}
+		return { cloudPlugins: pluginCount(cloud), localPlugins: pluginCount(local), loss };
+	}
+
 	private tellMoves(plan: ReturnType<typeof linkCounts>, facts: LinkFacts, tell: LinkReporter): void {
 		facts.downloadNotes = plan.downloadNotes;
 		facts.downloadAttachments = plan.downloadAttachments;
@@ -494,7 +535,12 @@ export class KnapSync {
 		tell("toUpload", facts);
 	}
 
-	async start(report?: LinkReporter, linking = false, choose?: LinkChooser): Promise<void> {
+	async start(
+		report?: LinkReporter,
+		linking = false,
+		choose?: LinkChooser,
+		confirmSettings?: SettingsConfirm,
+	): Promise<void> {
 		const stored = this.linked;
 		if (!stored || this.binding) {
 			return;
@@ -558,7 +604,11 @@ export class KnapSync {
 		tell("connecting", facts);
 		const tree = this.client.tree();
 		const cloudNotes = tree.entries();
-		const cloudAttachments = tree.attachments();
+		// Settings ride in the attachment map too, and they are not what a
+		// person counts as attachments, nor what the notes choice is about.
+		const cloudAttachments = new Map(
+			[...tree.attachments()].filter(([path]) => !isHidden(path)),
+		);
 		facts.cloudNotes = cloudNotes.size;
 		tell("cloudNotes", facts);
 		facts.cloudAttachments = cloudAttachments.size;
@@ -573,6 +623,13 @@ export class KnapSync {
 		// side the same as the other (ADR-0105). Without anybody to ask, it
 		// is refused as before (ADR-0098): the link comes off again and every
 		// file on this disk is untouched.
+		// Asked at most once per start, whichever of the two places below
+		// asks first.
+		let travel: Promise<boolean> | null = null;
+		const settingsTravel = () =>
+			(travel ??= this.options.config
+				? this.settingsTravel(stored.token, stored.cloudVaultId)
+				: Promise.resolve(false));
 		let cloudSide = { notes: [...cloudNotes.keys()], attachments: [...cloudAttachments.keys()] };
 		let localSide = { notes: localNotes, attachments: localAttachments };
 		if (linking) {
@@ -581,7 +638,27 @@ export class KnapSync {
 			const different = diff.different.filter((path) => diff.notes.has(path)).length;
 			facts.differentNotes = different;
 			facts.differentAttachments = diff.different.length - different;
+			facts.onlyCloudNotes = diff.onlyCloud.filter((path) => diff.notes.has(path)).length;
+			facts.onlyLocalNotes = diff.onlyLocal.filter((path) => diff.notes.has(path)).length;
+			const settings = (await settingsTravel())
+				? await this.settingsPicture(tree, stored.settingsInitialized === false)
+				: null;
+			if (this.client !== client) return;
+			if (settings) {
+				facts.cloudPlugins = settings.cloudPlugins;
+				facts.localPlugins = settings.localPlugins;
+			}
 			tell("different", facts);
+			// Settings first, because the notes choice below deletes and this
+			// question must come while nothing has been written (ADR-0107).
+			if (settings?.loss && confirmSettings) {
+				if (choose) this.tellMoves(linkCounts(cloudSide, localSide), facts, tell);
+				if (!(await confirmSettings(settings.loss))) {
+					await this.unlink();
+					throw new Error(LINK_CANCELLED);
+				}
+				if (this.client !== client) return;
+			}
 			if (isMerge(facts) && needsChoice(diff)) {
 				// The rows are the scan: what differs, and what is on one side
 				// only, counted as Keep both would move it. The choice may
@@ -636,11 +713,9 @@ export class KnapSync {
 		// the vault's own Sync settings switch, which is set on its page in
 		// the panel and nowhere here. Asked once per start, so turning it off
 		// reaches a device at its next start.
-		const settingsTravel = this.options.config
-			? await this.settingsTravel(stored.token, stored.cloudVaultId)
-			: false;
+		const travels = await settingsTravel();
 		this.settings =
-			this.options.config && settingsTravel
+			this.options.config && travels
 				? new ConfigBinding(
 						this.options.config,
 						this.client,

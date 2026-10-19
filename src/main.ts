@@ -419,17 +419,12 @@ export default class Live extends Plugin {
 
 		// Before the settings load, so a device moving from the old id
 		// starts with its own token and link (ADR-0103).
-		const adopted = await adoptLegacyPlugin(
+		// Silent: nobody outside Pantalytics ran the old plugin (ADR-0107).
+		await adoptLegacyPlugin(
 			this.app.vault.adapter,
 			(this.app as unknown as ObsidianApp).plugins,
 			this.app.vault.configDir,
 		);
-		if (adopted.disabled) {
-			new Notice(
-				"Pantalytics Knap is now Pantalytics. Your settings came along and the old plugin is off, so you can uninstall it.",
-				0,
-			);
-		}
 
 		this.settings = new Settings<RelaySettings>(this, DEFAULT_SETTINGS);
 		await this.settings.load();

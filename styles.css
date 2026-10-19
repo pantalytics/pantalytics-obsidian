@@ -883,3 +883,85 @@
 	justify-content: flex-end;
 	margin-top: var(--size-4-4);
 }
+
+/* The two sides of a link, next to each other, once both are counted
+   (ADR-0107). Two columns of three numbers, and the notes as one bar. */
+.knap-link-picture {
+	margin: var(--size-2-2) 0 var(--size-4-2);
+	padding: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.knap-link-sides {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--size-4-4);
+}
+
+.knap-link-side-title {
+	font-weight: var(--font-semibold);
+	margin-bottom: var(--size-2-2);
+}
+
+.knap-link-side-row {
+	display: flex;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.knap-link-bar {
+	display: flex;
+	height: 8px;
+	margin-top: var(--size-4-3);
+	border-radius: var(--radius-s);
+	overflow: hidden;
+	gap: 2px;
+}
+
+.knap-link-seg {
+	min-width: 4px;
+}
+
+.knap-link-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2) var(--size-4-3);
+	margin-top: var(--size-2-3);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.knap-link-key {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.knap-link-swatch {
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+}
+
+.knap-link-seg-same {
+	background-color: var(--color-green);
+}
+
+.knap-link-seg-different {
+	background-color: var(--color-orange);
+}
+
+.knap-link-seg-onlyCloud {
+	background-color: var(--color-blue);
+}
+
+.knap-link-seg-onlyLocal {
+	background-color: var(--color-purple);
+}
+
+/* What the cloud vault's settings take off this device, said in full. */
+.knap-link-removed {
+	color: var(--text-normal);
+}
