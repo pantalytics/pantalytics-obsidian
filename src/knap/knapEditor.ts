@@ -61,19 +61,23 @@ class CaretWidget extends WidgetType {
 	constructor(
 		private readonly color: string,
 		private readonly name: string,
+		private readonly ai: boolean,
 	) {
 		super();
 	}
 
 	eq(other: CaretWidget): boolean {
-		return other.color === this.color && other.name === this.name;
+		return other.color === this.color && other.name === this.name && other.ai === this.ai;
 	}
 
 	toDOM(): HTMLElement {
 		const caret = createSpan({ cls: "knap-caret" });
 		caret.style.borderColor = this.color;
 		caret.style.backgroundColor = this.color;
-		const label = createDiv({ cls: "knap-caret-name", text: this.name });
+		const label = createDiv({
+			cls: this.ai ? ["knap-caret-name", "knap-caret-name-ai"] : "knap-caret-name",
+			text: this.name,
+		});
 		label.style.backgroundColor = this.color;
 		caret.appendChild(label);
 		return caret;
@@ -110,7 +114,7 @@ export const knapCursorTheme = EditorView.baseTheme({
 		opacity: "0",
 		transition: "opacity .2s ease-in-out",
 	},
-	".knap-caret:hover > .knap-caret-name": {
+	".knap-caret:hover > .knap-caret-name, .knap-caret-name-ai": {
 		opacity: "1",
 	},
 	".knap-selection": {
@@ -137,7 +141,7 @@ export function cursorDecorations(
 		}
 		decorations.push(
 			Decoration.widget({
-				widget: new CaretWidget(cursor.color, cursor.name),
+				widget: new CaretWidget(cursor.color, cursor.name, cursor.ai),
 				// The caret belongs outside the selection it trails.
 				side: cursor.head > cursor.from ? 1 : -1,
 			}).range(cursor.head),

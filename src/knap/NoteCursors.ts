@@ -34,11 +34,18 @@ export interface CursorState {
 export interface CursorUser {
 	name: string;
 	color: string;
+	/**
+	 * Set by the server on the caret it draws for an AI writing through the
+	 * MCP (ADR-0108 in the admin repository). Its name stays on screen, since
+	 * nobody hovers over a caret that is gone in five seconds.
+	 */
+	ai?: boolean;
 }
 
 /** One other person's cursor, resolved against the text we are holding. */
 export interface RemoteCursor extends CursorUser {
 	clientId: number;
+	ai: boolean;
 	/** The lower of anchor and head, in editor offsets. */
 	from: number;
 	/** The higher of the two. Equal to `from` for a caret. */
@@ -150,6 +157,7 @@ export function readCursors(awareness: Awareness, text: Y.Text): RemoteCursor[] 
 			clientId,
 			name,
 			color: user.color || colorFor(name),
+			ai: user.ai === true,
 			from: Math.min(anchor, head),
 			to: Math.max(anchor, head),
 			head,
