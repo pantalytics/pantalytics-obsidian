@@ -38,7 +38,7 @@ import { generateHash } from "../hashing";
 import type { AttachmentEntry, TreeDoc } from "./TreeDoc";
 import { normalize } from "./TreeDoc";
 import type { Backlog, Pass } from "./VaultBinding";
-import { isSyncedConfig, manifestLast, pluginFolderOf } from "./configPaths";
+import { isSyncedConfig, manifestLast, pluginFolderOf, withOurselves } from "./configPaths";
 import { TREE_SYNC_FAILED, TREE_SYNC_TIMEOUT_MS, withTimeout } from "./deadline";
 
 /** What this binding needs from the config directory. Obsidian's adapter fits. */
@@ -74,6 +74,16 @@ export interface ConfigDocs {
 	treeSynced(): Promise<void>;
 }
 
+/**
+ * What this device last agreed with: per settings path, the hash of the cloud
+ * copy it last took or sent (ADR-0106). Kept in our own folder, which never
+ * travels, because it is a fact about this device and no other.
+ */
+export interface ConfigBases {
+	load(): Promise<Map<string, string>>;
+	save(bases: Map<string, string>): Promise<void>;
+}
+
 /** Told when a settings file cannot travel, so a screen can say so. */
 export type Refusal = (path: string, reason: string) => void;
 
@@ -104,6 +114,7 @@ export class ConfigBinding {
 	private settling = new Map<string, number>();
 	private rosterTimer: number | null = null;
 	private stopped = false;
+	private agreed = new Map<string, string>();
 
 	constructor(
 		private readonly store: ConfigStore,
@@ -118,6 +129,8 @@ export class ConfigBinding {
 		private readonly linking = false,
 		/** Told once when this device took the cloud vault's settings. */
 		private readonly adopted: () => void = () => undefined,
+		/** Where the agreed hashes live between starts. None: the cloud wins every start. */
+		private readonly bases: ConfigBases | null = null,
 	) {}
 
 	async start(): Promise<void> {
@@ -145,7 +158,11 @@ export class ConfigBinding {
 					if (!isSyncedConfig(path)) continue;
 					await this.store.remove(path);
 				}
+				for (const path of change.removed.keys()) {
+					if (!change.added.has(path)) this.agreed.delete(normalize(path));
+				}
 				if (arriving.some((path) => pluginFolderOf(path))) this.refreshRoster();
+				await this.saveBases();
 			});
 		});
 	}
@@ -229,6 +246,9 @@ export class ConfigBinding {
 			[...tree.attachments()].filter(([path]) => isSyncedConfig(path)),
 		);
 		const local = (await this.store.list()).filter((path) => isSyncedConfig(path));
+		// A link starts from nothing agreed: the record belongs to whatever
+		// this device was linked to before, if anything.
+		const agreed = this.linking ? new Map<string, string>() : await this.loadBases();
 
 		// **A device joining a cloud vault that already has settings adopts
 		// them, and sends nothing of its own** (ADR-0099). Overlapping files
@@ -248,7 +268,13 @@ export class ConfigBinding {
 			}
 			this.adopted();
 		}
-		const up = adopt ? [] : local.filter((path) => !recorded.has(normalize(path)));
+		const unrecorded = adopt ? [] : local.filter((path) => !recorded.has(normalize(path)));
+		// Here, not up there, and this device once agreed it was up there:
+		// another device removed it while this one was away.
+		for (const path of unrecorded) {
+			if (agreed.has(normalize(path))) await this.store.remove(path);
+		}
+		const up = unrecorded.filter((path) => !agreed.has(normalize(path)));
 		const down = manifestLast(
 			[...recorded.keys()].filter((path) => !local.includes(path)),
 		);
@@ -271,13 +297,35 @@ export class ConfigBinding {
 			const entry = recorded.get(path) as AttachmentEntry;
 			const missing = down.includes(path);
 			try {
-				await this.pull(path, entry);
+				await this.meet(path, entry, agreed.get(path));
 			} finally {
 				if (missing) this.outstanding.down -= 1;
 				this.pass.done += 1;
 			}
 		}
 		if ([...recorded.keys()].some((path) => pluginFolderOf(path))) this.refreshRoster();
+		await this.saveBases();
+	}
+
+	/**
+	 * One recorded path at start, settled against what this device last
+	 * agreed with rather than by the cloud winning outright (ADR-0106).
+	 *
+	 * If the cloud copy is still the one this device last agreed with, the
+	 * cloud has not moved, so whatever differs here was done here while the
+	 * plugin was not running: Obsidian's own writes before we load, a plugin
+	 * turned on, a setting changed offline. That goes up. Anything else is the
+	 * cloud's: it moved, or both moved and the cloud wins as it always has,
+	 * or there is no record and the cloud wins as it did before records.
+	 */
+	private async meet(path: string, entry: AttachmentEntry, base?: string): Promise<void> {
+		if (base !== undefined && base === entry.hash) {
+			const local = await this.store.read(path);
+			if (local === null) await this.forget(path);
+			else await this.push(path, local);
+			return;
+		}
+		await this.pull(path, entry);
 	}
 
 	// -- this device to the cloud vault --------------------------------------
@@ -286,9 +334,10 @@ export class ConfigBinding {
 		const content = await this.store.read(path);
 		if (content === null) {
 			await this.forget(path);
-			return;
+		} else {
+			await this.carry("up", () => this.push(path, content));
 		}
-		await this.carry("up", () => this.push(path, content));
+		await this.saveBases();
 	}
 
 	private async push(path: string, known?: ArrayBuffer): Promise<void> {
@@ -301,7 +350,10 @@ export class ConfigBinding {
 		// The idempotent check, and the one that breaks the echo: this
 		// binding's own writes come back as `raw` events and land here with
 		// the hash already recorded.
-		if (tree.attachmentFor(clean)?.hash === hash) return;
+		if (tree.attachmentFor(clean)?.hash === hash) {
+			this.agreed.set(clean, hash);
+			return;
+		}
 
 		try {
 			await this.transport.upload(clean, content);
@@ -310,11 +362,13 @@ export class ConfigBinding {
 			return;
 		}
 		tree.setAttachment(clean, { hash, size: content.byteLength });
+		this.agreed.set(clean, hash);
 	}
 
 	/** A settings file deleted here leaves the cloud vault with it. */
 	private async forget(path: string): Promise<void> {
 		const tree = this.docs.tree();
+		this.agreed.delete(normalize(path));
 		if (!tree.removeAttachment(path)) return;
 		try {
 			await this.transport.remove(path);
@@ -329,7 +383,10 @@ export class ConfigBinding {
 
 	private async pull(path: string, entry: AttachmentEntry): Promise<void> {
 		const local = await this.store.read(path);
-		if (local !== null && (await generateHash(local)) === entry.hash) return;
+		if (local !== null && (await generateHash(local)) === entry.hash) {
+			this.agreed.set(normalize(path), entry.hash);
+			return;
+		}
 
 		let content: ArrayBuffer;
 		try {
@@ -341,7 +398,35 @@ export class ConfigBinding {
 		// No conflict copy. Both sides are settings, the newer write wins,
 		// and a second copy of `appearance.json` beside the first is a file
 		// nobody can see and Obsidian would not read.
-		await this.store.write(path, content);
+		const kept = withOurselves(path, content);
+		await this.store.write(path, kept);
+		this.agreed.set(normalize(path), entry.hash);
+		// The roster arrived without us in it and was put right here, so the
+		// cloud copy is put right too, rather than switching us off on the
+		// next device that takes it.
+		if (kept !== content) await this.push(path, kept);
+	}
+
+	// -- what this device last agreed with -----------------------------------
+
+	private async loadBases(): Promise<Map<string, string>> {
+		if (!this.bases) return new Map();
+		try {
+			this.agreed = await this.bases.load();
+		} catch {
+			// Unreadable is the same as absent: the cloud wins, as before.
+			this.agreed = new Map();
+		}
+		return new Map(this.agreed);
+	}
+
+	private async saveBases(): Promise<void> {
+		if (!this.bases) return;
+		try {
+			await this.bases.save(new Map(this.agreed));
+		} catch {
+			// Losing the record costs the next start one cloud-wins pass.
+		}
 	}
 }
 
