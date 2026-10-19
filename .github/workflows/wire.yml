@@ -55,7 +55,7 @@ jobs:
       # run-wire.sh fetches y-sweet via npm into .cache/y-sweet on first run.
       # Keying on the script means a version bump in it invalidates the cache.
       - name: Cache y-sweet
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/y-sweet
           key: ysweet-${{ runner.os }}-${{ hashFiles('scripts/e2e/run-wire.sh') }}
@@ -127,7 +127,7 @@ jobs:
 
       - name: Cache y-sweet
         if: steps.gate.outputs.run == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: knap-obsidian/.cache/y-sweet
           key: ysweet-${{ runner.os }}-${{ hashFiles('knap-obsidian/scripts/e2e/run-wire.sh') }}
