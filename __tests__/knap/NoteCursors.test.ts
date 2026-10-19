@@ -178,3 +178,47 @@ describe("what the editor draws", () => {
 		expect(cursorDecorations(b.awareness, b.text, 4).size).toBe(0);
 	});
 });
+
+describe("the AI's caret", () => {
+	/**
+	 * The state the server puts on awareness for a tool write (ADR-0108 in
+	 * the admin repository): a selection over what was written, the head
+	 * sticking to its last character, and `ai` on the user. The admin suite
+	 * proves the server sends exactly this shape over the wire.
+	 */
+	function aiWrites(text: Y.Text, at: number, written: string) {
+		text.insert(at, written);
+		const anchor = Y.createRelativePositionFromTypeIndex(text, at, 0);
+		const head = Y.createRelativePositionFromTypeIndex(text, at + written.length, -1);
+		return {
+			user: { name: "daniel (AI)", ai: true },
+			cursor: { anchor: Y.relativePositionToJSON(anchor), head: Y.relativePositionToJSON(head) },
+		};
+	}
+
+	it("covers what the AI wrote while somebody types around it", () => {
+		const me = device("Laptop");
+		me.text.insert(0, "Notulen\n");
+		const state = aiWrites(me.text, 8, "Besluit: ja.");
+		me.awareness.states.set(42, state);
+
+		me.text.insert(0, "Vandaag. ");
+		me.text.insert(me.text.length, "\nEinde");
+
+		const [seen] = readCursors(me.awareness, me.text);
+		expect(me.text.toString().slice(seen.from, seen.to)).toBe("Besluit: ja.");
+		expect(seen.name).toBe("daniel (AI)");
+		expect(seen.ai).toBe(true);
+	});
+
+	it("is the only caret that says so", () => {
+		const a = device("Laptop");
+		const b = device("Telefoon");
+		a.text.insert(0, "Hello world\n");
+		relayDoc(a.doc, b.doc);
+		publishCursor(a.awareness, a.text, { anchor: 3, head: 3 });
+		relayAwareness(a.awareness, b.awareness);
+
+		expect(readCursors(b.awareness, b.text)[0].ai).toBe(false);
+	});
+});
