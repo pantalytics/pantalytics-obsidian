@@ -209,6 +209,13 @@ export class VaultBinding {
 	private bases = new Map<string, string>();
 	/** Set whenever a base changed, cleared when it is saved. */
 	private basesDirty = false;
+	/**
+	 * Documents this device made for a note of its own since it started.
+	 * When two devices make a note at one path at once, the tree keeps one
+	 * document there, and only the device whose document lost owes the
+	 * world a copy of it. Every other device was only ever holding it.
+	 */
+	private minted = new Set<string>();
 
 	constructor(
 		private readonly files: FileStore,
@@ -246,10 +253,14 @@ export class VaultBinding {
 					// its own push coming back through the tree, not a note
 					// arriving from somewhere else, and putting it on the
 					// down gauge would count every upload twice.
+					// A path in both halves is the same name pointed at another
+					// document, which is how two notes made at one path at
+					// once settle.
+					const previous = change.removed.get(path);
 					if (this.noteObservers.has(docId)) {
-						await this.bindNote(path, docId);
+						await this.bindNote(path, docId, previous);
 					} else {
-						await this.carry("down", () => this.bindNote(path, docId));
+						await this.carry("down", () => this.bindNote(path, docId, previous));
 					}
 				}
 				for (const [path, docId] of change.removed) {
@@ -515,28 +526,76 @@ export class VaultBinding {
 		// The work is sorted before any of it runs, because the gauge the
 		// corner of the window reads is how many notes are still to move, and
 		// the waves below only ever know about eight at a time.
-		const gone: string[] = [];
-		const up: string[] = [];
+		const missingThere: string[] = [];
+		let up: string[] = [];
 		for (const path of local) {
 			if (remote.has(path)) continue;
-			// In the tree when this device last looked and not now: deleted in
-			// the cloud vault while this device was away. A delete is a delete,
-			// in both directions.
-			(seen.has(path) ? gone : up).push(path);
+			// In the tree when this device last looked and not now: deleted or
+			// renamed in the cloud vault while this device was away.
+			(seen.has(path) ? missingThere : up).push(path);
 		}
+		const missingHere: [string, string][] = [];
 		const bind: [string, string][] = [];
 		for (const [path, docId] of remote) {
 			if (!local.has(path) && !emptied && seen.get(path) === docId) {
 				// The same note, at the same path, as this device last had
-				// it on disk, and the file is gone. Somebody deleted it here
+				// it on disk, and the file is gone: deleted or renamed here
 				// while the plugin was not running. Without the record this
 				// downloaded the note back, every time, on every device.
-				tree.remove(path);
-				this.seenDirty = true;
+				missingHere.push([path, docId]);
 				continue;
 			}
 			bind.push([path, docId]);
 		}
+
+		// A note that left the cloud vault's tree while this device was away.
+		// Renamed there: the file follows it, and an edit made here meanwhile
+		// is settled at the new name like any other. Deleted there: the
+		// delete travels, unless this device wrote in the note since it last
+		// agreed with the cloud. Then the note goes back up, because a delete
+		// says nothing about words its author never saw.
+		const gone: string[] = [];
+		for (const path of missingThere) {
+			const docId = seen.get(path) as string;
+			const moved = tree.pathFor(docId);
+			if (moved !== undefined && !local.has(moved)) {
+				await this.files.rename(path, moved);
+				local.delete(path);
+				local.add(moved);
+				continue;
+			}
+			if (await this.untouchedHere(path, docId)) gone.push(path);
+			else up.push(path);
+		}
+
+		// A note that left this disk while the plugin was off. The same text
+		// under a new name is a rename, and the tree follows it. Anything else
+		// is a delete, and it travels, unless somebody wrote in the note in the
+		// cloud since this device last agreed with it.
+		const deletedHere: [string, string][] = [];
+		if (missingHere.length > 0) {
+			const upByHash = new Map<string, string | null>();
+			for (const path of up) {
+				const text = await this.files.read(path);
+				if (text === null) continue;
+				const hash = await hashOf(text);
+				upByHash.set(hash, upByHash.has(hash) ? null : path);
+			}
+			for (const [path, docId] of missingHere) {
+				const base = this.bases.get(docId);
+				const renamed = base === undefined ? undefined : upByHash.get(base);
+				if (renamed) {
+					tree.move(path, renamed);
+					this.seenDirty = true;
+					up = up.filter((candidate) => candidate !== renamed);
+					upByHash.set(base as string, null);
+					bind.push([renamed, docId]);
+					continue;
+				}
+				deletedHere.push([path, docId]);
+			}
+		}
+
 		// A note the tree lists that is already on the disk is a bind, not a
 		// download: it opens the document and writes nothing. Counting those
 		// would put the whole vault on the gauge at every start.
@@ -545,12 +604,23 @@ export class VaultBinding {
 		this.outstanding.down += down.size;
 		// Everything the pass is about to do, counted before any of it runs,
 		// so the first reading already says how much there is.
-		this.pass = { done: 0, total: gone.length + up.length + bind.length };
+		this.pass = {
+			done: 0,
+			total: gone.length + deletedHere.length + up.length + bind.length,
+		};
 
 		// Each half runs several notes deep. The tree above is read first and
 		// in full, so what each note does is its own business and the width
 		// only decides how many are waiting for a socket at once.
 		await this.inWaves(gone, (path) => this.files.remove(path));
+		await this.inWaves(deletedHere, async ([path, docId]) => {
+			if (await this.untouchedThere(docId)) {
+				tree.remove(path);
+				this.seenDirty = true;
+			} else {
+				await this.bindNote(path, docId);
+			}
+		});
 		await this.inWaves(up, async (path) => {
 			try {
 				await this.pushNote(path);
@@ -591,6 +661,30 @@ export class VaultBinding {
 		// on either side from here is a move from this.
 		this.agreeHash(docId, cloud);
 		return true;
+	}
+
+	/**
+	 * Whether the file at `path` is still the text this device last agreed
+	 * on for `docId`. No base is no answer, and no answer keeps the file.
+	 */
+	private async untouchedHere(path: string, docId: string): Promise<boolean> {
+		const base = this.bases.get(docId);
+		const text = await this.files.read(path);
+		return base !== undefined && text !== null && (await hashOf(text)) === base;
+	}
+
+	/**
+	 * Whether the cloud's text for `docId` is still the one this device last
+	 * agreed on. Read off the document, never off the tree's hash: the
+	 * mirror writes that a flush later, and a hash that still matches the
+	 * base over an edit nobody has mirrored yet would delete that edit.
+	 */
+	private async untouchedThere(docId: string): Promise<boolean> {
+		const base = this.bases.get(docId);
+		if (base === undefined) return false;
+		return this.docs.withNote(docId, async ({ doc }) => {
+			return (await hashOf(textOf(doc.getText(CONTENT)))) === base;
+		});
 	}
 
 	/**
@@ -694,7 +788,10 @@ export class VaultBinding {
 		const tree = this.docs.tree();
 		const known = tree.docIdFor(clean);
 		const docId = tree.ensureNote(clean);
-		if (known === undefined) this.seenDirty = true;
+		if (known === undefined) {
+			this.seenDirty = true;
+			this.minted.add(docId);
+		}
 		const copy = await this.docs.withNote(docId, async ({ doc }) => {
 			const content = doc.getText(CONTENT);
 			// Read inside the borrow, not before it: the wait for a socket can
@@ -734,6 +831,7 @@ export class VaultBinding {
 		docId: string,
 		doc: Y.Doc,
 		fileText: string,
+		previous?: string,
 	): Promise<string | null> {
 		const content = doc.getText(CONTENT);
 		const docText = textOf(content);
@@ -774,6 +872,20 @@ export class VaultBinding {
 			await this.agree(docId, fileText);
 			return null;
 		}
+		if (
+			previous !== undefined &&
+			previous !== docId &&
+			!this.minted.has(previous) &&
+			this.bases.get(previous) === (await hashOf(fileText))
+		) {
+			// The path now names another document, and the file is the one it
+			// named before, untouched here. That text belongs to the device
+			// that made it, which keeps its copy; a second copy from here
+			// would only be the same words under another person's name.
+			await this.files.write(path, docText);
+			await this.agree(docId, docText);
+			return null;
+		}
 		// Both sides wrote, or this device cannot say which one did. The
 		// cloud text wins the path; the local text survives beside it, named
 		// for what happened.
@@ -796,7 +908,7 @@ export class VaultBinding {
 	 * made a note of the same name. Writing the cloud text over it would be
 	 * the one thing this binding promises never to do.
 	 */
-	private async bindNote(path: string, docId: string): Promise<void> {
+	private async bindNote(path: string, docId: string, previous?: string): Promise<void> {
 		const copy = await this.docs.withNote(docId, async ({ doc }) => {
 			const content = doc.getText(CONTENT);
 			const fileText = await this.files.read(path);
@@ -806,7 +918,7 @@ export class VaultBinding {
 				await this.files.write(path, docText);
 				await this.agree(docId, docText);
 			} else {
-				conflict = await this.converge(path, docId, doc, fileText);
+				conflict = await this.converge(path, docId, doc, fileText, previous);
 			}
 			this.observeNote(path, docId, content);
 			return conflict;

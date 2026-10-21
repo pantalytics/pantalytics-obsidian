@@ -26,7 +26,7 @@ import {
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 
-import { LiveNote, fromDocument } from "./LiveNote";
+import { LiveNote, fromDocument, type PendingTyping } from "./LiveNote";
 import { readCursors } from "./NoteCursors";
 
 /** One note, live: its text, the awareness beside it, and how to let go. */
@@ -159,7 +159,10 @@ class KnapEditorPlugin implements PluginValue {
 	/** The note this editor is waiting on, and how to stop waiting. */
 	private waitingFor: string | null = null;
 	private stopWaiting: (() => void) | null = null;
-	private onAwareness: () => void;
+	private onAwareness: (changes: unknown, origin: unknown) => void;
+	/** A redraw is already on its way; the next one would draw the same. */
+	private redrawing = false;
+	private destroyed = false;
 	decorations: DecorationSet = Decoration.none;
 
 	constructor(
@@ -168,12 +171,23 @@ class KnapEditorPlugin implements PluginValue {
 		private readonly pathOf: (state: EditorState) => string | null,
 	) {
 		// An awareness change is not an editor change, so it needs a nudge to
-		// get the decorations recomputed. An empty transaction is the nudge.
-		this.onAwareness = () => this.view.dispatch({});
+		// get the decorations recomputed. Our own caret is published from
+		// inside `update`, where awareness fires synchronously and a dispatch
+		// throws; CodeMirror then switches this plugin off for the editor and
+		// nobody is live any more (issue #183). Our own caret is not drawn
+		// here anyway, so only somebody else's change asks for a redraw.
+		this.onAwareness = (_changes, origin) => {
+			if (origin !== "local") this.redraw();
+		};
 		this.bind();
 	}
 
-	private bind(): void {
+	/**
+	 * Bind this editor to its note. May run inside a CodeMirror update or the
+	 * plugin's own construction, so nothing in here dispatches: lining the
+	 * editor up with the document waits for the update to finish.
+	 */
+	private bind(pending?: PendingTyping): void {
 		const path = this.pathOf(this.view.state);
 		if (!path || path === this.path) return;
 		this.unbind();
@@ -185,9 +199,27 @@ class KnapEditorPlugin implements PluginValue {
 		this.cancelWait();
 		this.path = path;
 		this.note = note;
-		this.live = new LiveNote(this.view, note.text, note.awareness, note.who);
+		const live = new LiveNote(this.view, note.text, note.awareness, note.who);
+		this.live = live;
 		note.awareness.on("change", this.onAwareness);
 		this.refresh();
+		// A microtask runs before the next keystroke or socket message can, so
+		// nothing reaches either side between binding and lining up.
+		queueMicrotask(() => {
+			if (this.live !== live) return;
+			live.align(pending);
+			this.refresh();
+		});
+	}
+
+	/** Recompute the carets once the current update, if any, is over. */
+	private redraw(): void {
+		if (this.redrawing) return;
+		this.redrawing = true;
+		queueMicrotask(() => {
+			this.redrawing = false;
+			if (!this.destroyed && this.note) this.view.dispatch({});
+		});
 	}
 
 	/**
@@ -205,9 +237,8 @@ class KnapEditorPlugin implements PluginValue {
 			this.waitingFor = null;
 			if (this.pathOf(this.view.state) !== path) return;
 			this.bind();
-			// An empty transaction, so the decorations are drawn now rather
-			// than on the next keystroke.
-			if (this.live) this.view.dispatch({});
+			// So the decorations are drawn now rather than on the next keystroke.
+			if (this.live) this.redraw();
 		});
 	}
 
@@ -232,8 +263,19 @@ class KnapEditorPlugin implements PluginValue {
 		// bind to, and a note opened in a tab that already existed has not
 		// been asked for. Both settle on a later update rather than never.
 		if (!this.live || this.pathOf(update.state) !== this.path) {
-			this.bind();
+			// Typing in this very update is handed to the binding rather than
+			// pushed below: `align` decides whether it is the difference
+			// between editor and document, and pushing it again here put it
+			// into the note twice.
+			const mine =
+				update.docChanged && update.transactions.some((tr) => !tr.annotation(fromDocument));
+			this.bind(
+				mine ? { before: update.startState.doc.toString(), changes: update.changes } : undefined,
+			);
 			if (!this.live) return;
+			this.live.publishSelection(update.state, update.view.hasFocus);
+			this.refresh();
+			return;
 		}
 		if (update.docChanged) {
 			const mine = update.transactions.some((tr) => !tr.annotation(fromDocument));
@@ -253,6 +295,7 @@ class KnapEditorPlugin implements PluginValue {
 	}
 
 	destroy(): void {
+		this.destroyed = true;
 		this.cancelWait();
 		this.unbind();
 	}

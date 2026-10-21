@@ -72,24 +72,38 @@ export function minimalChange(
 	};
 }
 
+/**
+ * Keystrokes the editor took in the same update that bound it: the text it
+ * held just before them, and the changes themselves.
+ */
+export interface PendingTyping {
+	before: string;
+	changes: ChangeSet;
+}
+
 export class LiveNote {
 	private readonly observer: (event: Y.YTextEvent, transaction: Y.Transaction) => void;
 	private destroyed = false;
 
+	/**
+	 * Bound, but not lined up yet: call `align` once the editor may take a
+	 * dispatch. The constructor can run inside a CodeMirror update, and a
+	 * dispatch there throws and switches the whole plugin off for that
+	 * editor (issue #183, measured on 1.13.49 with two people in one note).
+	 */
 	constructor(
 		private readonly view: EditorLike,
 		private readonly text: Y.Text,
 		private readonly awareness: Awareness,
 		private readonly who: string,
 	) {
-		this.adopt();
 		publishUser(this.awareness, this.who);
 		this.observer = (event, transaction) => this.onDocumentChange(event, transaction);
 		this.text.observe(this.observer);
 	}
 
 	/**
-	 * Line the two up the moment they are bound, document first.
+	 * Line the two up once they are bound, document first.
 	 *
 	 * The document wins because it is the one both sides of the vault agree
 	 * on, and because the editor was filled from the file, which the file
@@ -98,11 +112,21 @@ export class LiveNote {
 	 * editor's text is the note: an empty document and a note somebody
 	 * deliberately emptied look identical from here, so this goes the way
 	 * that cannot lose anything, exactly as `VaultBinding.bindNote` does.
+	 *
+	 * `pending` is typing that arrived in the very update that bound the
+	 * note. When the editor held the document's text just before it, those
+	 * keystrokes are the whole difference: they go into the document rather
+	 * than being reverted by it, and never twice (the other half of #183).
 	 */
-	private adopt(): void {
+	align(pending?: PendingTyping): void {
+		if (this.destroyed) return;
 		const editorText = this.view.state.doc.toString();
 		const documentText = textOf(this.text);
 		if (editorText === documentText) return;
+		if (pending && pending.before === documentText) {
+			this.pushChanges(pending.changes);
+			return;
+		}
 		if (documentText === "") {
 			this.pushText("", editorText);
 			return;
