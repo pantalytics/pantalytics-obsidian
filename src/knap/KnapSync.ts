@@ -315,6 +315,7 @@ export class KnapSync {
 		if (this.firstSync && word === UP_TO_DATE) {
 			this.firstSync = false;
 			void this.rememberInitialized();
+			void this.recount();
 		}
 		return {
 			word,
@@ -563,7 +564,8 @@ export class KnapSync {
 		// number rides along on every socket so the server can say "1773 of
 		// 2611 notes" while a fill is behind, instead of a bare count that
 		// reads as complete. Stale within a session is fine: the local total
-		// barely moves, and every restart takes it fresh.
+		// barely moves, and every restart takes it fresh. The exception is a
+		// first fill, which recount() catches when it ends.
 		//
 		// Taken before the first socket opens, which is why the two local
 		// steps are reported after the two cloud ones despite happening
@@ -786,6 +788,24 @@ export class KnapSync {
 			// See above.
 		} finally {
 			this.settling = false;
+		}
+	}
+
+	/**
+	 * Count this disk again once a first pass is through.
+	 *
+	 * The count at start was taken before the fill, so on a vault that came
+	 * down empty it says 1 for the rest of the session (#181). Sockets opened
+	 * from here on carry the new number. Never fatal: a failed count leaves
+	 * the old one, which the next restart replaces anyway.
+	 */
+	private async recount(): Promise<void> {
+		try {
+			const notes = await this.options.files.listNotes();
+			const attachments = await this.options.files.listAttachments();
+			this.counts = { notes: notes.length, attachments: attachments.length };
+		} catch {
+			// See above.
 		}
 	}
 
