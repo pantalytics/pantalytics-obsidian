@@ -47,6 +47,7 @@ function device(text: string, name = "Laptop") {
 	const editor = new StubEditor(text);
 	const awareness = new Awareness(doc);
 	const live = new LiveNote(editor, content, awareness, name);
+	live.align();
 	return { doc, content, editor, awareness, live };
 }
 
@@ -127,7 +128,7 @@ describe("LiveNote", () => {
 		content.insert(0, "wat de cloud heeft\n");
 		const editor = new StubEditor("wat op deze schijf staat\n");
 
-		new LiveNote(editor, content, new Awareness(doc), "Laptop");
+		new LiveNote(editor, content, new Awareness(doc), "Laptop").align();
 
 		expect(editor.text).toBe("wat de cloud heeft\n");
 		expect(content.toString()).toBe("wat de cloud heeft\n");
@@ -138,7 +139,7 @@ describe("LiveNote", () => {
 		const content = doc.getText("content");
 		const editor = new StubEditor("# Nieuw\n\nNog nergens heen gesynct.\n");
 
-		new LiveNote(editor, content, new Awareness(doc), "Laptop");
+		new LiveNote(editor, content, new Awareness(doc), "Laptop").align();
 
 		expect(content.toString()).toBe("# Nieuw\n\nNog nergens heen gesynct.\n");
 		expect(editor.text).toBe("# Nieuw\n\nNog nergens heen gesynct.\n");

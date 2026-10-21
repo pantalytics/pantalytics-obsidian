@@ -16,6 +16,12 @@ import * as Y from "yjs";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import * as syncProtocol from "y-protocols/sync";
+import {
+	Awareness,
+	applyAwarenessUpdate,
+	encodeAwarenessUpdate,
+	removeAwarenessStates,
+} from "y-protocols/awareness";
 
 import type { FileEvent, FileStore } from "../../src/knap/VaultBinding";
 
@@ -23,6 +29,14 @@ import type { FileEvent, FileStore } from "../../src/knap/VaultBinding";
 export const SOCKET_CEILING = 255;
 
 const messageSync = 0;
+const messageAwareness = 1;
+
+function awarenessMessage(awareness: Awareness, clients: number[]): Uint8Array {
+	const encoder = encoding.createEncoder();
+	encoding.writeVarUint(encoder, messageAwareness);
+	encoding.writeVarUint8Array(encoder, encodeAwarenessUpdate(awareness, clients));
+	return encoding.toUint8Array(encoder);
+}
 
 /**
  * The server, as far as a socket can tell: one document per room, and every
@@ -48,6 +62,24 @@ export class FakeNetwork {
 	closedWith = new Map<string, string>();
 	docs = new Map<string, Y.Doc>();
 	sockets = new Map<string, Set<FakeSocket>>();
+	private awarenesses = new Map<string, Awareness>();
+
+	/**
+	 * Who is in a room and where their caret is, as the server keeps it: it
+	 * forwards every awareness message to the rest of the room, greets a
+	 * socket that joins with everybody already there, and drops a socket's
+	 * people when it closes (knap_server/sync.py in the admin repository).
+	 */
+	awareness(room: string): Awareness {
+		let awareness = this.awarenesses.get(room);
+		if (!awareness) {
+			awareness = new Awareness(this.doc(room));
+			// The server has no caret of its own.
+			awareness.setLocalState(null);
+			this.awarenesses.set(room, awareness);
+		}
+		return awareness;
+	}
 
 	doc(room: string): Y.Doc {
 		let doc = this.docs.get(room);
@@ -90,6 +122,8 @@ export class FakeSocket {
 	onclose: ((event: unknown) => void) | null = null;
 	onerror: ((event: unknown) => void) | null = null;
 	private readonly room: string;
+	/** Awareness clients this socket introduced, dropped when it closes. */
+	private readonly people = new Set<number>();
 
 	constructor(
 		private readonly network: FakeNetwork,
@@ -121,6 +155,9 @@ export class FakeSocket {
 			if (this.readyState !== 0) return;
 			this.readyState = 1;
 			this.onopen?.();
+			const awareness = network.awareness(this.room);
+			const present = [...awareness.getStates().keys()];
+			if (present.length > 0) this.deliver(awarenessMessage(awareness, present), true);
 		}, 0);
 	}
 
@@ -142,7 +179,21 @@ export class FakeSocket {
 	private receive(data: Uint8Array): void {
 		const decoder = decoding.createDecoder(data);
 		const encoder = encoding.createEncoder();
-		if (decoding.readVarUint(decoder) !== messageSync) return; // awareness
+		const type = decoding.readVarUint(decoder);
+		if (type === messageAwareness) {
+			const update = decoding.readVarUint8Array(decoder);
+			const awareness = this.network.awareness(this.room);
+			const before = new Set(awareness.getStates().keys());
+			applyAwarenessUpdate(awareness, update, this);
+			for (const client of awareness.getStates().keys()) {
+				if (!before.has(client)) this.people.add(client);
+			}
+			for (const socket of this.network.sockets.get(this.room) ?? []) {
+				if (socket !== this) socket.deliver(data, true);
+			}
+			return;
+		}
+		if (type !== messageSync) return;
 		encoding.writeVarUint(encoder, messageSync);
 		syncProtocol.readSyncMessage(decoder, encoder, this.network.doc(this.room), this);
 		if (encoding.length(encoder) > 1) this.deliver(encoding.toUint8Array(encoder), true);
@@ -176,6 +227,13 @@ export class FakeSocket {
 		this.network.live -= 1;
 		this.network.sockets.get(this.room)?.delete(this);
 		if (wasOpen) this.network.closedWith.set(this.room, this.network.text(this.room));
+		if (this.people.size > 0) {
+			const awareness = this.network.awareness(this.room);
+			const gone = [...this.people];
+			removeAwarenessStates(awareness, gone, this);
+			const message = awarenessMessage(awareness, gone);
+			for (const socket of this.network.sockets.get(this.room) ?? []) socket.deliver(message, true);
+		}
 		this.onclose?.({});
 	}
 }
