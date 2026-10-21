@@ -19,7 +19,9 @@ export const ANOTHER_DEVICE_TITLE = "Add another device";
  * off the list.
  */
 export const ANOTHER_DEVICE_STEPS: readonly string[] = [
-	"On the other device: Settings, Community plugins, Browse. Search for Pantalytics, install it and enable it.",
+	// Obsidian never installs a plugin update by itself; since desktop 1.11.1
+	// it can check and say so, which is how a fix reaches the other device.
+	"On the other device: Settings, Community plugins, Browse. Search for Pantalytics, install it and enable it. On a computer, also turn on Automatically check for plugin updates on that screen.",
 	"Settings, Pantalytics, Sign in with the same account, then pick this vault from the list.",
 ];
 
