@@ -152,6 +152,17 @@ export function cursorDecorations(
 	return Decoration.set(decorations, true);
 }
 
+/**
+ * Whether this editor is a table cell being edited in Live Preview. Obsidian
+ * builds that editor inside a `.table-cell-wrapper`, and it shows the note's
+ * own file, so by its path it looks like the note. It is one cell of it:
+ * bound to the note, lining up put the whole note into that cell (#187). The
+ * note's editor already carries what is typed in the cell.
+ */
+function inTableCell(view: EditorView): boolean {
+	return view.dom.closest(".table-cell-wrapper") !== null;
+}
+
 class KnapEditorPlugin implements PluginValue {
 	private note: LiveNoteHandle | null = null;
 	private live: LiveNote | null = null;
@@ -188,7 +199,7 @@ class KnapEditorPlugin implements PluginValue {
 	 * editor up with the document waits for the update to finish.
 	 */
 	private bind(pending?: PendingTyping): void {
-		const path = this.pathOf(this.view.state);
+		const path = inTableCell(this.view) ? null : this.pathOf(this.view.state);
 		if (!path || path === this.path) return;
 		this.unbind();
 		const note = this.source.openNote(path);

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Clicking into a table cell no longer puts the whole note into that cell. Live editing treated the cell as the note itself and filled it with everything in the note, line breaks turned into `<br>`. Obsidian then widened every row to match, and a short note grew to tens of thousands of characters.
 - Two people in one note now see each other. Each caret shows with the person's name on it, and every key goes to the other screen as it is typed. Until now the live editor switched itself off the first time you clicked into a note. Nobody saw anybody's caret, typing only travelled when Obsidian saved the file, and two people typing at once got a conflict copy every few seconds.
 - A key typed in the very moment a note connects goes in once. It used to land twice, or not at all.
 - An edit made offline survives what happened in the cloud meanwhile. If somebody deleted the note, your edit brings it back instead of going down with it. If somebody renamed it, your file follows the new name and your edit is merged in. Before, both of these threw the offline edit away.
