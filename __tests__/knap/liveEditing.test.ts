@@ -43,12 +43,18 @@ Object.assign(globalThis, {
 
 const PATH = "ICP App.md";
 const pathField = StateField.define<string>({ create: () => PATH, update: (value) => value });
+/** The extensions Obsidian gives every editor showing `PATH`. */
+const editing = (source: LiveNoteSource) => [
+	pathField,
+	knapLiveEditing(source, (state) => state.field(pathField, false) ?? null),
+];
 
 class Person {
 	readonly doc = new Y.Doc();
 	readonly text = this.doc.getText("content");
 	readonly awareness = new Awareness(this.doc);
 	view!: EditorView;
+	source!: LiveNoteSource;
 	online = true;
 	/** Updates this person made while offline, sent when they are back. */
 	outbox: Uint8Array[] = [];
@@ -144,7 +150,7 @@ class Room {
 		}
 		this.people.push(person);
 
-		const source: LiveNoteSource = {
+		const source: LiveNoteSource = (person.source = {
 			openNote: () =>
 				person.ready
 					? {
@@ -154,14 +160,11 @@ class Room {
 							release: () => undefined,
 						}
 					: null,
-		};
+		});
 		person.view = new EditorView({
 			state: EditorState.create({
 				doc: options.editorText ?? this.server.getText("content").toString(),
-				extensions: [
-					pathField,
-					knapLiveEditing(source, (state) => state.field(pathField, false) ?? null),
-				],
+				extensions: editing(source),
 			}),
 			parent: document.body,
 		});
@@ -398,6 +401,27 @@ describe("two and three people in one open note, in real editors", () => {
 		expect(room.note.match(/Open vragen\?/g)).toHaveLength(1);
 		expect(room.note).not.toContain("??");
 		expect(rutger.editorText).toContain("Open vragen?");
+	});
+
+	it("a table cell being edited keeps its own text, and the note stays the note", async () => {
+		// Live Preview edits a table cell in an editor of its own, built inside
+		// a `.table-cell-wrapper` and showing the same file as the note. Bound
+		// to the note, it was lined up with all of it: the whole note went into
+		// one cell, newlines as <br>, and Obsidian padded every row to that
+		// width, 7k chars to 66k (#187, measured on prod 2026-10-26).
+		const rutger = room.join("Rutger");
+		await tick();
+		const wrapper = document.body.appendChild(make("div", { cls: "table-cell-wrapper" }));
+		const cell = new EditorView({
+			state: EditorState.create({ doc: "De doelgroep.", extensions: editing(rutger.source) }),
+			parent: wrapper,
+		});
+		await tick();
+
+		expect(cell.state.doc.toString()).toBe("De doelgroep.");
+		expect(room.note).toBe(NOTE);
+		cell.destroy();
+		wrapper.remove();
 	});
 
 	it("a remote change lands in an editor without moving its own caret", async () => {
