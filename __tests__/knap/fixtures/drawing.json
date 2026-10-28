@@ -1,0 +1,16 @@
+{
+ "text": "---\n\nexcalidraw-plugin: parsed\ntags: [excalidraw]\n\n---\n==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠==\n\n\n# Excalidraw Data\n\n## Text Elements\nHallo wereld ^t1\n\n%%\n## Drawing\n```json\n```\n%%",
+ "map": {
+  "t1": "{\"id\":\"t1\",\"type\":\"text\",\"x\":10.5,\"y\":-3,\"text\":\"Hallo wereld\",\"index\":\"a1\",\"version\":3,\"versionNonce\":42,\"isDeleted\":false,\"groupIds\":[],\"boundElements\":null,\"customData\":{\"ü\":\"ë\"}}",
+  "r1": "{\"id\":\"r1\",\"type\":\"rectangle\",\"x\":0,\"y\":0,\"width\":100,\"height\":60,\"index\":\"a0\",\"version\":2,\"versionNonce\":7,\"isDeleted\":false,\"groupIds\":[],\"boundElements\":[{\"id\":\"t1\",\"type\":\"text\"}]}",
+  "gone": "{\"id\":\"gone\",\"type\":\"ellipse\",\"x\":1,\"y\":2,\"index\":\"a2\",\"version\":5,\"versionNonce\":1,\"isDeleted\":true,\"groupIds\":[]}"
+ },
+ "scene": {
+  "type": "\"excalidraw\"",
+  "version": "2",
+  "source": "\"https://github.com/zsviczian/obsidian-excalidraw-plugin\"",
+  "appState": "{\"viewBackgroundColor\":\"#ffffff\",\"gridSize\":null}",
+  "files": "{}"
+ },
+ "rendered": "---\n\nexcalidraw-plugin: parsed\ntags: [excalidraw]\n\n---\n==⚠  Switch to EXCALIDRAW VIEW in the MORE OPTIONS menu of this document. ⚠==\n\n\n# Excalidraw Data\n\n## Text Elements\nHallo wereld ^t1\n\n%%\n## Drawing\n```json\n{\n\t\"type\": \"excalidraw\",\n\t\"version\": 2,\n\t\"source\": \"https://github.com/zsviczian/obsidian-excalidraw-plugin\",\n\t\"elements\": [\n\t\t{\n\t\t\t\"id\": \"r1\",\n\t\t\t\"type\": \"rectangle\",\n\t\t\t\"x\": 0,\n\t\t\t\"y\": 0,\n\t\t\t\"width\": 100,\n\t\t\t\"height\": 60,\n\t\t\t\"index\": \"a0\",\n\t\t\t\"version\": 2,\n\t\t\t\"versionNonce\": 7,\n\t\t\t\"isDeleted\": false,\n\t\t\t\"groupIds\": [],\n\t\t\t\"boundElements\": [\n\t\t\t\t{\n\t\t\t\t\t\"id\": \"t1\",\n\t\t\t\t\t\"type\": \"text\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\t\"id\": \"t1\",\n\t\t\t\"type\": \"text\",\n\t\t\t\"x\": 10.5,\n\t\t\t\"y\": -3,\n\t\t\t\"text\": \"Hallo wereld\",\n\t\t\t\"index\": \"a1\",\n\t\t\t\"version\": 3,\n\t\t\t\"versionNonce\": 42,\n\t\t\t\"isDeleted\": false,\n\t\t\t\"groupIds\": [],\n\t\t\t\"boundElements\": null,\n\t\t\t\"customData\": {\n\t\t\t\t\"ü\": \"ë\"\n\t\t\t}\n\t\t},\n\t\t{\n\t\t\t\"id\": \"gone\",\n\t\t\t\"type\": \"ellipse\",\n\t\t\t\"x\": 1,\n\t\t\t\"y\": 2,\n\t\t\t\"index\": \"a2\",\n\t\t\t\"version\": 5,\n\t\t\t\"versionNonce\": 1,\n\t\t\t\"isDeleted\": true,\n\t\t\t\"groupIds\": []\n\t\t}\n\t],\n\t\"appState\": {\n\t\t\"viewBackgroundColor\": \"#ffffff\",\n\t\t\"gridSize\": null\n\t},\n\t\"files\": {}\n}\n```\n%%"
+}

@@ -24,6 +24,7 @@ import { setFaultSink } from "./faultSink";
 import type { CloudVault } from "./KnapServer";
 import type { ServerNotice } from "./notices";
 import { knapLiveEditing } from "./knapEditor";
+import { followDrawings } from "./ObsidianDrawings";
 import { KnapSync } from "./KnapSync";
 import type { KnapLink } from "./KnapSync";
 import { ObsidianConfigBases } from "./ObsidianConfigBases";
@@ -312,6 +313,10 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 	host.registerEditorExtension(
 		knapLiveEditing(sync, (state) => state.field(editorInfoField, false)?.file?.path ?? null),
 	);
+
+	// The same for Excalidraw drawings: strokes and pointers while a drawing
+	// is open, per element (ADR-0109).
+	followDrawings(host, sync);
 
 	host.registerObsidianProtocolHandler(SIGNIN_ACTION, (params) => {
 		const fed = sync.handleDeepLink(params as unknown as Record<string, string>);

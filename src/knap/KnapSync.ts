@@ -39,6 +39,7 @@ import { AttachmentBinding } from "./AttachmentBinding";
 import type { ConfigBases, ConfigStore } from "./ConfigBinding";
 import { ConfigBinding } from "./ConfigBinding";
 import type { LiveNoteHandle } from "./knapEditor";
+import type { LiveDrawingHandle } from "./ObsidianDrawings";
 import { conflictLabelFor, personLabel } from "./person";
 import { generateHash } from "../hashing";
 import type { TreeDoc } from "./TreeDoc";
@@ -941,6 +942,34 @@ export class KnapSync {
 				unhold();
 				note.release();
 			},
+		};
+	}
+
+	/**
+	 * The live document behind one drawing, for an open Excalidraw view to
+	 * bind to (ADR-0109). Null where `openNote` would say null, for the same
+	 * reasons.
+	 *
+	 * Unlike a note in an editor, the file binding does not stand down: the
+	 * text around a drawing's scene still travels through the file, so the
+	 * binding is asked to follow the note instead, for as long as it is pinned.
+	 */
+	openDrawing(path: string): LiveDrawingHandle | null {
+		const clean = normalize(path);
+		if (!this.client || !this.binding) return null;
+		const docId = this.client.tree().docIdFor(clean);
+		if (!docId) return null;
+		const note = this.client.pin(docId);
+		if (!note.provider.synced) {
+			note.release();
+			return null;
+		}
+		void this.binding.follow(clean);
+		return {
+			doc: note.doc,
+			awareness: note.provider.awareness,
+			who: personLabel(this.person, this.options.deviceName),
+			release: () => note.release(),
 		};
 	}
 
