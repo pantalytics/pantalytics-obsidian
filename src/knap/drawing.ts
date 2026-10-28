@@ -51,6 +51,22 @@ export const EMPTY_FENCE = "```json\n```";
  */
 const SCENE_BLOCK = /(## Drawing\n)```(compressed-json|json)\n([\s\S]*?)\n?```(?=\n%%|\s*$)/;
 
+/**
+ * What Excalidraw writes above the scene on its first save. A new drawing is
+ * created without it, and Excalidraw 2.29.0, reloading an open drawing whose
+ * file changed, copies each text element's entry out of this section: with
+ * no section the entries come back undefined and every save after that
+ * throws (issue #193, measured in a real Obsidian). So a drawing that reaches
+ * the document without it gets it, in the form Excalidraw's own save gives.
+ */
+const EXCALIDRAW_HEADER = "# Excalidraw Data\n\n## Text Elements\n%%\n";
+
+/** A file older than the "# Excalidraw Data" layout keeps the layout it has. */
+function withHeader(head: string): string {
+	if (/^# Excalidraw Data$|^# Text Elements$|^%%$/m.test(head)) return head;
+	return head + EXCALIDRAW_HEADER;
+}
+
 export interface Element {
 	id: string;
 	version: number;
@@ -92,7 +108,7 @@ export function parseDrawing(file: string): Drawing | null {
 	const match = SCENE_BLOCK.exec(file);
 	if (!match) return null;
 	const [whole, heading, kind, body] = match;
-	const text = file.slice(0, match.index) + heading + EMPTY_FENCE + file.slice(match.index + whole.length);
+	const text = withHeader(file.slice(0, match.index)) + heading + EMPTY_FENCE + file.slice(match.index + whole.length);
 	if (body.trim() === "") return { text, elements: [], rest: {} };
 	const json = kind === "json" ? body : LZString.decompressFromBase64(body.replace(/[\r\n]/g, ""));
 	if (!json) return null;
