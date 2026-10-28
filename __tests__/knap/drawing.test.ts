@@ -129,6 +129,17 @@ describe("a drawing file", () => {
 		expect(canonical(broken)).toBe(broken);
 	});
 
+	it("gets the header Excalidraw writes on its first save when it was created without one (#193)", () => {
+		// Excalidraw 2.29.0 creates a drawing as the frontmatter and the scene,
+		// and adds "# Excalidraw Data" on its first save. Without it, an open
+		// drawing whose file changed loses its text entries and no save works.
+		const saved = file([rect("a", "a0")], { compressed: false });
+		const created = saved.replace("# Excalidraw Data\n\n## Text Elements\n%%\n", "");
+		expect(canonical(created)).toBe(canonical(saved));
+		expect(canonical(canonical(created))).toBe(canonical(created));
+		expect(parseDrawing(created)?.text).toContain("\n\n\n# Excalidraw Data\n\n## Text Elements\n%%\n## Drawing\n");
+	});
+
 	it("settles one element by Excalidraw's rule: version, then the lower nonce", () => {
 		const base = rect("a", "a0");
 		const one = { ...base, version: 2, versionNonce: 5 };

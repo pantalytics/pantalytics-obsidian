@@ -93,6 +93,20 @@ describe("an editor that asked too early", () => {
 		sync.stop();
 	});
 
+	it("a drawing is never bound to a text editor, synced or not", async () => {
+		const network = new FakeNetwork();
+		const tree = new TreeDoc(network.doc(`/sync/v1/${TREE_DOC_ID}`));
+		const docId = tree.ensureNote("Bord.excalidraw.md");
+		network.doc(`/sync/v1/${docId}`).getText("content").insert(0, "## Drawing\n```json\n```\n%%");
+		const { sync } = await linked(network);
+		await new Promise<void>((resolve) => sync.whenSynced("Bord.excalidraw.md", resolve));
+
+		// Bound, the editor would hold the empty fence, and Excalidraw would
+		// read it while switching the file to its own view (issue #193).
+		expect(sync.openNote("Bord.excalidraw.md")).toBeNull();
+		sync.stop();
+	});
+
 	it("a note the cloud vault has never heard of is not waited for", async () => {
 		const network = new FakeNetwork();
 		const { sync } = await linked(network);

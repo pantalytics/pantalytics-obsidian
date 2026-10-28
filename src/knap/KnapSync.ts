@@ -34,6 +34,7 @@ import { diffSides, isMerge, linkCounts, mergeRefusal, needsChoice, removalsFor 
 import type { SettingsLoss } from "./linkCompare";
 import { hasHotkeys, pluginCount, settingsLoss } from "./linkCompare";
 import { CONFIG_DIR, isSyncedConfig } from "./configPaths";
+import { isDrawing } from "./drawing";
 import type { AttachmentTransport, Refusal } from "./AttachmentBinding";
 import { AttachmentBinding } from "./AttachmentBinding";
 import type { ConfigBases, ConfigStore } from "./ConfigBinding";
@@ -918,6 +919,10 @@ export class KnapSync {
 	openNote(path: string): LiveNoteHandle | null {
 		const clean = normalize(path);
 		if (!this.client || !this.binding) return null;
+		// A drawing's Text is the file with the scene taken out (ADR-0109).
+		// Bound to an editor it would hand Excalidraw an empty fence, which
+		// is what it reads while it switches a just-opened file to its view.
+		if (isDrawing(clean)) return null;
 		const docId = this.client.tree().docIdFor(clean);
 		if (!docId) return null;
 		const note = this.client.pin(docId);
