@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Two people can draw in one Excalidraw drawing at the same time. While the drawing is open, each stroke shows on the other screen as it is drawn, and the other person's pointer shows with their name, the way it does on excalidraw.com. Until now a drawing synced as one block of text, and two people saving at once broke it: in almost every case the drawing no longer opened. A drawing is now kept per element, and when two people change the same element, Excalidraw's own rule picks which change stays. Drawings that were synced before move over the first time they are saved. Update Pantalytics on every device that opens drawings: an older version shows a moved drawing as empty, although nothing in it is lost. Tested with the Excalidraw plugin 2.29.
 - Clicking into a table cell no longer puts the whole note into that cell. Live editing treated the cell as the note itself and filled it with everything in the note, line breaks turned into `<br>`. Obsidian then widened every row to match, and a short note grew to tens of thousands of characters.
 - Two people in one note now see each other. Each caret shows with the person's name on it, and every key goes to the other screen as it is typed. Until now the live editor switched itself off the first time you clicked into a note. Nobody saw anybody's caret, typing only travelled when Obsidian saved the file, and two people typing at once got a conflict copy every few seconds.
 - A key typed in the very moment a note connects goes in once. It used to land twice, or not at all.

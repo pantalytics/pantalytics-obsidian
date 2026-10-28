@@ -153,6 +153,13 @@ export class Hub {
 		return (peers[0] ?? new Y.Doc()).getMap<string>("files");
 	}
 
+	/** The server's copy of one document: the first peer that opened it. */
+	docOf(docId: string): Y.Doc {
+		const peer = this.byId.get(docId)?.[0];
+		if (!peer) throw new Error(`no document ${docId}`);
+		return peer;
+	}
+
 	/** Every document that has ever been opened, minus the tree. */
 	documentCount(): number {
 		return [...this.byId.keys()].filter((id) => id !== "tree").length;
@@ -247,7 +254,9 @@ export async function device(
 ) {
 	const files = new MemoryFiles();
 	for (const [path, text] of Object.entries(seed)) files.map.set(path, text);
-	const binding = new VaultBinding(files, hub.device(), () => label, seen);
+	// No wait before a drawing's file follows its document: the tests settle
+	// on turns of the event loop, not on seconds.
+	const binding = new VaultBinding(files, hub.device(), () => label, seen, 0);
 	await binding.start();
 	return { files, binding };
 }
@@ -262,7 +271,7 @@ export async function restart(
 	seen: SeenTree | null = null,
 	label = "conflict",
 ) {
-	const binding = new VaultBinding(files, hub.device(), () => label, seen);
+	const binding = new VaultBinding(files, hub.device(), () => label, seen, 0);
 	await binding.start();
 	return binding;
 }

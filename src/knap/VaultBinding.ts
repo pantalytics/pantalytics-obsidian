@@ -45,6 +45,15 @@ import { generateHash } from "../hashing";
 import { knapFault } from "./faultSink";
 import { TREE_SYNC_FAILED, TREE_SYNC_TIMEOUT_MS, withTimeout } from "./deadline";
 import { TreeDoc, isNote, normalize } from "./TreeDoc";
+import {
+	ELEMENTS,
+	canonical,
+	ingestDrawing,
+	isDrawing,
+	parseDrawing,
+	renderDocument,
+	textOfDocument,
+} from "./drawing";
 
 export interface FileEvent {
 	type: "create" | "modify" | "delete" | "rename";
@@ -175,10 +184,21 @@ const CONTENT = "content";
  */
 const FILL_WIDTH = 8;
 
+/** How long a drawing's document has to be quiet before its file follows. */
+export const DRAWING_WRITE_DELAY_MS = 1000;
+
 /** Y.Text implements toString; the lint rule cannot see that through AbstractType. */
 function textOf(content: Y.Text): string {
 	// eslint-disable-next-line @typescript-eslint/no-base-to-string -- Y.Text has a real toString
 	return content.toString();
+}
+
+/**
+ * The note as a file: its Text, or for a drawing the file the Text and the
+ * element map stand for together (ADR-0109).
+ */
+function noteText(doc: Y.Doc, path: string): string {
+	return isDrawing(path) ? renderDocument(doc) : textOf(doc.getText(CONTENT));
 }
 
 /** The same sha256 the server's mirror writes into the tree. */
@@ -191,6 +211,8 @@ export class VaultBinding {
 	private stopTreeEvents: (() => void) | null = null;
 	private stopNoteCloses: (() => void) | null = null;
 	private noteObservers = new Map<string, () => void>();
+	/** A drawing's file write waiting for its document to go quiet, by id. */
+	private drawingWrites = new Map<string, number>();
 	private queue: Promise<void> = Promise.resolve();
 	private failures = 0;
 	/** Work taken on and not finished, by direction. Never edits. */
@@ -222,6 +244,7 @@ export class VaultBinding {
 		private readonly docs: VaultDocs,
 		private readonly conflictLabel = () => `conflict ${new Date().toISOString().slice(0, 10)}`,
 		private readonly seen: SeenTree | null = null,
+		private readonly drawingWriteDelayMs = DRAWING_WRITE_DELAY_MS,
 	) {}
 
 	/**
@@ -291,6 +314,8 @@ export class VaultBinding {
 		this.stopNoteCloses?.();
 		for (const stop of this.noteObservers.values()) stop();
 		this.noteObservers.clear();
+		for (const timer of this.drawingWrites.values()) window.clearTimeout(timer);
+		this.drawingWrites.clear();
 	}
 
 	/** Wait for everything queued so far; tests and shutdown use it. */
@@ -350,6 +375,24 @@ export class VaultBinding {
 	}
 
 	/**
+	 * Keep following one note's document, so its file keeps up with it.
+	 *
+	 * A drawing open in the Excalidraw view is bound live (LiveDrawing), but
+	 * the text around its scene still travels through the file, and a note
+	 * that matched the cloud at start was never opened by this binding at
+	 * all. The note is pinned by whoever calls this, so the observer stays
+	 * until the pin goes.
+	 */
+	follow(path: string): Promise<void> {
+		const clean = normalize(path);
+		return this.enqueue(async () => {
+			const docId = this.docs.tree().docIdFor(clean);
+			if (!docId || this.noteObservers.has(docId)) return;
+			await this.docs.withNote(docId, async ({ doc }) => this.observeNote(clean, docId, doc));
+		});
+	}
+
+	/**
 	 * Stand down for one note, because an editor is bound to it directly.
 	 *
 	 * Two writers on one note is one too many. While a note is open,
@@ -382,9 +425,9 @@ export class VaultBinding {
 		const docId = tree.docIdFor(path);
 		if (!docId) return;
 		await this.docs.withNote(docId, async ({ doc }) => {
-			const text = textOf(doc.getText(CONTENT));
 			const at = tree.pathFor(docId) ?? path;
-			if ((await this.files.read(at)) !== text) {
+			const text = noteText(doc, at);
+			if ((await this.readNote(at)) !== text) {
 				await this.files.write(at, text);
 			}
 			await this.agree(docId, text);
@@ -419,8 +462,8 @@ export class VaultBinding {
 		const docId = this.docs.tree().docIdFor(path);
 		if (!docId) return;
 		await this.docs.withNote(docId, async ({ doc }) => {
-			const text = textOf(doc.getText(CONTENT));
-			if ((await this.files.read(path)) === text) await this.agree(docId, text);
+			const text = noteText(doc, path);
+			if ((await this.readNote(path)) === text) await this.agree(docId, text);
 		});
 	}
 
@@ -576,7 +619,7 @@ export class VaultBinding {
 		if (missingHere.length > 0) {
 			const upByHash = new Map<string, string | null>();
 			for (const path of up) {
-				const text = await this.files.read(path);
+				const text = await this.readNote(path);
 				if (text === null) continue;
 				const hash = await hashOf(text);
 				upByHash.set(hash, upByHash.has(hash) ? null : path);
@@ -614,7 +657,7 @@ export class VaultBinding {
 		// only decides how many are waiting for a socket at once.
 		await this.inWaves(gone, (path) => this.files.remove(path));
 		await this.inWaves(deletedHere, async ([path, docId]) => {
-			if (await this.untouchedThere(docId)) {
+			if (await this.untouchedThere(path, docId)) {
 				tree.remove(path);
 				this.seenDirty = true;
 			} else {
@@ -654,7 +697,7 @@ export class VaultBinding {
 	private async sameAsCloud(path: string, docId: string): Promise<boolean> {
 		const cloud = this.docs.tree().hashFor(docId);
 		if (cloud === undefined) return false;
-		const text = await this.files.read(path);
+		const text = await this.readNote(path);
 		if (text === null) return false;
 		if ((await hashOf(text)) !== cloud) return false;
 		// The file is a text the cloud held, so it is a base: whatever moves
@@ -669,7 +712,7 @@ export class VaultBinding {
 	 */
 	private async untouchedHere(path: string, docId: string): Promise<boolean> {
 		const base = this.bases.get(docId);
-		const text = await this.files.read(path);
+		const text = await this.readNote(path);
 		return base !== undefined && text !== null && (await hashOf(text)) === base;
 	}
 
@@ -679,11 +722,11 @@ export class VaultBinding {
 	 * mirror writes that a flush later, and a hash that still matches the
 	 * base over an edit nobody has mirrored yet would delete that edit.
 	 */
-	private async untouchedThere(docId: string): Promise<boolean> {
+	private async untouchedThere(path: string, docId: string): Promise<boolean> {
 		const base = this.bases.get(docId);
 		if (base === undefined) return false;
 		return this.docs.withNote(docId, async ({ doc }) => {
-			return (await hashOf(textOf(doc.getText(CONTENT)))) === base;
+			return (await hashOf(noteText(doc, path))) === base;
 		});
 	}
 
@@ -793,13 +836,12 @@ export class VaultBinding {
 			this.minted.add(docId);
 		}
 		const copy = await this.docs.withNote(docId, async ({ doc }) => {
-			const content = doc.getText(CONTENT);
 			// Read inside the borrow, not before it: the wait for a socket can
 			// be long, and the file that decides is the file as it is now.
-			const fileText = await this.files.read(clean);
+			const fileText = await this.readNote(clean);
 			const conflict =
 				fileText === null ? null : await this.converge(clean, docId, doc, fileText);
-			this.observeNote(clean, docId, content);
+			this.observeNote(clean, docId, doc);
 			return conflict;
 		});
 		if (copy) await this.pushNote(copy);
@@ -833,6 +875,10 @@ export class VaultBinding {
 		fileText: string,
 		previous?: string,
 	): Promise<string | null> {
+		if (isDrawing(path)) {
+			const settled = await this.convergeDrawing(path, docId, doc, fileText);
+			if (settled !== undefined) return settled;
+		}
 		const content = doc.getText(CONTENT);
 		const docText = textOf(content);
 		if (fileText === docText) {
@@ -896,6 +942,65 @@ export class VaultBinding {
 		return conflict;
 	}
 
+	/**
+	 * Settle a drawing, element by element (ADR-0109).
+	 *
+	 * The three ways above are for text, where two edits to one note can only
+	 * be kept apart by a copy. A drawing's elements merge by Excalidraw's own
+	 * rule instead, so both people's strokes stay in the drawing and no copy
+	 * is made for them. Only the text around the scene still settles the old
+	 * way: when both sides changed it, the cloud's text keeps the drawing and
+	 * this device's file goes beside it as a copy, as for any note.
+	 *
+	 * Undefined for a file that is not a drawing any more (somebody turned it
+	 * into a plain note), which then takes the road every note takes.
+	 */
+	private async convergeDrawing(
+		path: string,
+		docId: string,
+		doc: Y.Doc,
+		fileText: string,
+	): Promise<string | null | undefined> {
+		const docText = renderDocument(doc);
+		if (fileText === docText) {
+			await this.agree(docId, docText);
+			return null;
+		}
+		const base = this.bases.get(docId);
+		if (fileText === "" || (base !== undefined && (await hashOf(fileText)) === base)) {
+			// Only the cloud moved, or this is a fill cut off halfway. The
+			// file's elements still count where they beat the map's, as in
+			// observeNote; its text does not.
+			ingestDrawing(doc, fileText, false);
+			const next = renderDocument(doc);
+			await this.files.write(path, next);
+			await this.agree(docId, next);
+			return null;
+		}
+		const incoming = parseDrawing(fileText);
+		if (!incoming) return undefined;
+		const docMoved =
+			docText !== "" && (base === undefined || (await hashOf(docText)) !== base);
+		const clash = docMoved && textOfDocument(doc) !== incoming.text;
+		ingestDrawing(doc, fileText, !clash);
+		const merged = renderDocument(doc);
+		if (merged !== fileText) await this.files.write(path, merged);
+		await this.agree(docId, merged);
+		if (!clash) return null;
+		const copy = buildConflictCopyPath(path, this.conflictLabel());
+		await this.files.write(copy, fileText);
+		return copy;
+	}
+
+	/**
+	 * A note's file as the binding compares it. A drawing reads in its one
+	 * form, so the Excalidraw plugin saving it compressed is not an edit.
+	 */
+	private async readNote(path: string): Promise<string | null> {
+		const text = await this.files.read(path);
+		return text !== null && isDrawing(path) ? canonical(text) : text;
+	}
+
 	// -- remote to local ------------------------------------------------------
 
 	/**
@@ -910,17 +1015,16 @@ export class VaultBinding {
 	 */
 	private async bindNote(path: string, docId: string, previous?: string): Promise<void> {
 		const copy = await this.docs.withNote(docId, async ({ doc }) => {
-			const content = doc.getText(CONTENT);
-			const fileText = await this.files.read(path);
+			const fileText = await this.readNote(path);
 			let conflict: string | null = null;
 			if (fileText === null) {
-				const docText = textOf(content);
+				const docText = noteText(doc, path);
 				await this.files.write(path, docText);
 				await this.agree(docId, docText);
 			} else {
 				conflict = await this.converge(path, docId, doc, fileText, previous);
 			}
-			this.observeNote(path, docId, content);
+			this.observeNote(path, docId, doc);
 			return conflict;
 		});
 		// The copy is a note of its own and needs a document of its own, so it
@@ -939,15 +1043,34 @@ export class VaultBinding {
 	 * handed back and closed. What was observed is what gets written, and a
 	 * second change writes again, so the last one still wins.
 	 */
-	private observeNote(path: string, docId: string, content: Y.Text): void {
+	private observeNote(path: string, docId: string, doc: Y.Doc): void {
 		if (this.noteObservers.has(docId)) return;
+		const content = doc.getText(CONTENT);
+		const drawing = isDrawing(path);
 		const observer = () => {
-			const text = textOf(content);
+			if (drawing) {
+				// Somebody drawing live sends a few changes a second, and
+				// every one of them would be a file write here and a reload in
+				// the open view. The view already has them (LiveDrawing); the
+				// file only has to follow, once things go quiet.
+				window.clearTimeout(this.drawingWrites.get(docId));
+				this.drawingWrites.set(
+					docId,
+					window.setTimeout(() => {
+						this.drawingWrites.delete(docId);
+						if (this.noteObservers.has(docId)) write(noteText(doc, this.docs.tree().pathFor(docId) ?? path));
+					}, this.drawingWriteDelayMs),
+				);
+				return;
+			}
+			write(noteText(doc, this.docs.tree().pathFor(docId) ?? path));
+		};
+		const write = (text: string) => {
 			void this.enqueue(async () => {
 				const current = this.docs.tree().pathFor(docId) ?? path;
 				// An open editor already has this change and owns the file.
 				if (this.held.has(current)) return;
-				const fileText = await this.files.read(current);
+				const fileText = await this.readNote(current);
 				if (fileText === text) {
 					await this.agree(docId, text);
 					return;
@@ -965,15 +1088,37 @@ export class VaultBinding {
 					// first would put it over that edit.
 					return;
 				}
-				await this.files.write(current, text);
-				await this.agree(docId, text);
+				let next = text;
+				// Only while the socket is up: the pool may have closed this
+				// note between the change and this turn, and a write into a
+				// closed document goes nowhere.
+				const open = this.noteObservers.has(docId);
+				if (open && isDrawing(current) && fileText !== null && ingestDrawing(doc, fileText, false)) {
+					// Two people who moved one element at once both set it, and
+					// the map kept whichever set it keeps, not the one
+					// Excalidraw's rule picks. An element in this file that
+					// beats the map's goes back in; it is a no-op otherwise,
+					// and the same rule on every device settles the element.
+					next = renderDocument(doc);
+				}
+				await this.files.write(current, next);
+				await this.agree(docId, next);
 			});
 		};
 		content.observe(observer);
-		this.noteObservers.set(docId, () => content.unobserve(observer));
+		// A drawing's elements live beside the Text, and a stroke from
+		// somebody else changes only them.
+		const elements = isDrawing(path) ? doc.getMap(ELEMENTS) : null;
+		elements?.observe(observer);
+		this.noteObservers.set(docId, () => {
+			content.unobserve(observer);
+			elements?.unobserve(observer);
+		});
 	}
 
 	private unobserveNote(docId: string): void {
+		window.clearTimeout(this.drawingWrites.get(docId));
+		this.drawingWrites.delete(docId);
 		this.noteObservers.get(docId)?.();
 		this.noteObservers.delete(docId);
 	}
