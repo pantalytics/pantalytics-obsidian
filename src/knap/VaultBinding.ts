@@ -221,6 +221,8 @@ export class VaultBinding {
 	private pass: Pass = { done: 0, total: 0 };
 	/** Paths an open editor is holding, which this binding leaves alone. */
 	private held = new Set<string>();
+	/** Drawings open in an Excalidraw view, whose file this binding does not write (#195). */
+	private drawingsOpen = new Set<string>();
 	/** Set whenever this device changed the tree, cleared when it is saved. */
 	private seenDirty = false;
 	/**
@@ -416,6 +418,35 @@ export class VaultBinding {
 			if (released) return;
 			released = true;
 			this.held.delete(clean);
+			void this.enqueue(() => this.writeFromDocument(clean));
+		};
+	}
+
+	/**
+	 * An Excalidraw view has this drawing open: stop writing its file, keep
+	 * reading it.
+	 *
+	 * The view gets remote strokes from LiveDrawing, so a write here adds
+	 * nothing it lacks. What it does do is reload the view from a file whose
+	 * `## Text Elements` is the one from Excalidraw's last save, and
+	 * Excalidraw takes a text element's words from that section: a line typed
+	 * since that save disappears on screen and the next change sends it out
+	 * deleted (#195). Excalidraw's own saves still come in as edits, which is
+	 * how the text around the scene keeps travelling.
+	 *
+	 * Dropped: another person's change to that surrounding text reaches this
+	 * file once the view closes, not while it is open.
+	 *
+	 * Returns the close, which catches the file up from the document once.
+	 */
+	drawingOpen(path: string): () => void {
+		const clean = normalize(path);
+		this.drawingsOpen.add(clean);
+		let closed = false;
+		return () => {
+			if (closed) return;
+			closed = true;
+			this.drawingsOpen.delete(clean);
 			void this.enqueue(() => this.writeFromDocument(clean));
 		};
 	}
@@ -1068,8 +1099,8 @@ export class VaultBinding {
 		const write = (text: string) => {
 			void this.enqueue(async () => {
 				const current = this.docs.tree().pathFor(docId) ?? path;
-				// An open editor already has this change and owns the file.
-				if (this.held.has(current)) return;
+				// An open editor or drawing already has this change and owns the file.
+				if (this.held.has(current) || this.drawingsOpen.has(current)) return;
 				const fileText = await this.readNote(current);
 				if (fileText === text) {
 					await this.agree(docId, text);

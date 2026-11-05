@@ -955,9 +955,9 @@ export class KnapSync {
 	 * bind to (ADR-0109). Null where `openNote` would say null, for the same
 	 * reasons.
 	 *
-	 * Unlike a note in an editor, the file binding does not stand down: the
-	 * text around a drawing's scene still travels through the file, so the
-	 * binding is asked to follow the note instead, for as long as it is pinned.
+	 * Unlike a note in an editor, the file binding half stands down: it keeps
+	 * reading the file, because the text around a drawing's scene travels
+	 * that way, and stops writing it while the view is open (#195).
 	 */
 	openDrawing(path: string): LiveDrawingHandle | null {
 		const clean = normalize(path);
@@ -970,11 +970,15 @@ export class KnapSync {
 			return null;
 		}
 		void this.binding.follow(clean);
+		const close = this.binding.drawingOpen(clean);
 		return {
 			doc: note.doc,
 			awareness: note.provider.awareness,
 			who: personLabel(this.person, this.options.deviceName),
-			release: () => note.release(),
+			release: () => {
+				close();
+				note.release();
+			},
 		};
 	}
 

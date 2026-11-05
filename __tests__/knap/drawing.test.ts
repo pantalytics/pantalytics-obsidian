@@ -274,6 +274,27 @@ describe("two people drawing at once", () => {
 	});
 });
 
+describe("a drawing open in Excalidraw", () => {
+	it("is not written over while open, so a line typed since the last save stays (#195)", async () => {
+		const a = rect("a", "a0");
+		const { rutger, daniel } = await twoPeople([a]);
+		const before = rutger.files.map.get(PATH);
+
+		// Rutger has the drawing open: strokes reach his view live, and a
+		// write here would reload it from text a save behind.
+		await rutger.binding.follow(PATH);
+		const close = rutger.binding.drawingOpen(PATH);
+		await daniel.files.write(PATH, file([moved(a, 300)]));
+		await settle(rutger.binding, daniel.binding);
+		expect(rutger.files.map.get(PATH)).toBe(before);
+
+		// Closed, the file catches up once.
+		close();
+		await settle(rutger.binding, daniel.binding);
+		expect(elementsOf(rutger.files.map.get(PATH)).get("a")?.x).toBe(300);
+	});
+});
+
 describe("a drawing synced the old way", () => {
 	it("reads from a Text that still holds the whole file, and moves it into the map on the next save", async () => {
 		const a = rect("a", "a0");
