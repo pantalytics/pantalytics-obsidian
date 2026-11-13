@@ -51,6 +51,9 @@ either side of it rather than like a panel we built.
   │ │ Total                       2,979 notes, 148 attachments │ │
   │ └──────────────────────────────────────────────────────────┘ │
   │                                                              │
+  │ Read-only link                                    [ Open ]   │  ← to the vault's
+  │ Let anybody with the link read this vault's notes. ...       │    Settings page
+  │                                                              │
   │ Pantalytics dashboard                            (i)  [ Open ]      │  ← the way out
   │ Opens next.knap.pantalytics.com in your browser. Invite      │    (i) pressed
   │ your team, connect your AI over MCP.                         │
@@ -69,8 +72,10 @@ Each of the four parts earns its place, and they are in the order they depend
 on each other. **Account** is who. **Cloud vault** is what this vault syncs
 with. **The strip** under it is how that vault is going, and it is inside that
 row's block rather than beside it: one border round both, a hairline between.
-**Pantalytics dashboard** is last, because it is the only control here that leaves
-Obsidian.
+**Read-only link**, once there is a link, opens that cloud vault's Settings on
+the dashboard, where the switch is: who may read a vault is set there and
+nowhere else (admin ADR-0111). **Pantalytics dashboard** is last, because it is
+the way out to everything else.
 
 **The strip belonged to nothing until 2026-09-02.** It sat above both rows, the
 first thing on the screen, which said it was a third subject on a screen with
