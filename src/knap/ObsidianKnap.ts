@@ -16,7 +16,7 @@
  * here says server, relay or share to a person.
  */
 
-import { Notice, Platform, Plugin, SuggestModal, editorInfoField } from "obsidian";
+import { Notice, Platform, Plugin, SuggestModal, TFile, editorInfoField } from "obsidian";
 
 import { reportFault, setFaultCredential } from "../faults";
 import { setFaultSink } from "./faultSink";
@@ -306,6 +306,52 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 		});
 
 	host.addSettingTab(new KnapSettingsTab(host, sync, { signIn, pickAndLink }, serverUrl));
+
+	/**
+	 * A read-only link to one note or drawing (admin ADR-0112), copied.
+	 *
+	 * In the file's own menu and in the palette, and only for a markdown
+	 * file in a linked vault: a link is to a note the cloud vault holds, and
+	 * an attachment has no page. The address goes to the clipboard and the
+	 * notice says what it does, because a link that reaches anybody is worth
+	 * one sentence. Turning it off is on the dashboard, which lists them all.
+	 */
+	const copyNoteLink = (file: TFile) => {
+		const linked = sync.linked;
+		if (!linked) return;
+		sync.server
+			.noteLink(linked.token, linked.cloudVaultId, file.path)
+			.then(async (link) => {
+				await navigator.clipboard.writeText(link);
+				new Notice("Read-only link copied. Anybody with it can read this note.");
+			})
+			.catch((error: Error) => new Notice(error.message));
+	};
+	const linkable = (file: unknown): file is TFile =>
+		file instanceof TFile && file.extension === "md" && sync.linked !== null;
+
+	host.registerEvent(
+		host.app.workspace.on("file-menu", (menu, file) => {
+			if (!linkable(file)) return;
+			menu.addItem((item) =>
+				item
+					.setTitle("Copy read-only link")
+					.setIcon("link")
+					.onClick(() => copyNoteLink(file)),
+			);
+		}),
+	);
+
+	host.addCommand({
+		id: "copy-read-only-link",
+		name: "Copy read-only link to this note",
+		checkCallback: (checking) => {
+			const file = host.app.workspace.getActiveFile();
+			if (!linkable(file)) return false;
+			if (!checking) copyNoteLink(file);
+			return true;
+		},
+	});
 
 	// Live editing and the cursors on it, for whichever note an editor is
 	// showing. Which file that is is Obsidian's answer to give, so it comes

@@ -138,6 +138,33 @@ export class KnapServer {
 		return { subject: body.subject ?? "", email: body.email ?? "" };
 	}
 
+	/**
+	 * A read-only link to one note or drawing, made as this account (admin
+	 * ADR-0112). Asking twice gives the same address. Who may read a note is
+	 * the dashboard's to list and to turn off; making one starts here,
+	 * because the note is chosen here.
+	 */
+	async noteLink(token: string, vaultId: string, path: string): Promise<string> {
+		const response = await this.fetchFn(`${this.baseUrl}/admin/api/vault-note-link`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ vault_id: vaultId, path, on: true }),
+		});
+		if (response.status === 401) {
+			throw new KnapServerError("Not signed in any more. Sign in again.", 401);
+		}
+		let body: { link?: string; error?: string } = {};
+		try {
+			body = (await response.json()) as typeof body;
+		} catch {
+			// No JSON is the server not answering, said below.
+		}
+		if (!response.ok || !body.link) {
+			throw new KnapServerError(body.error ?? "The server did not answer.", response.status);
+		}
+		return body.link;
+	}
+
 	/** The cloud vaults this account may open. */
 	async listVaults(token: string): Promise<CloudVault[]> {
 		const response = await this.fetchFn(`${this.baseUrl}/api/vaults`, {

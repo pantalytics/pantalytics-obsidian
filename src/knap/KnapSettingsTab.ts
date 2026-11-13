@@ -210,17 +210,6 @@ export function dashboardUrl(serverUrl: string): string {
 }
 
 /**
- * Where Read-only link lands: this cloud vault's Settings on the dashboard,
- * scrolled to the switch. Who may read a vault is set there and nowhere else
- * (ADR-0031, admin ADR-0111), so the plugin opens the page rather than
- * turning the link on itself.
- */
-export function readLinkUrl(serverUrl: string, cloudVaultId: string): string {
-	const base = serverUrl.replace(/\/+$/, "");
-	return `${base}/admin/vaults/${encodeURIComponent(cloudVaultId)}/settings#read-link-h`;
-}
-
-/**
  * The two sentences behind the (i), and everything this row says beyond its
  * own name.
  *
@@ -366,7 +355,6 @@ export class KnapSettingsTab extends PluginSettingTab {
 			this.statusEl = block.createDiv({ cls: "knap-status-slot" });
 			this.paint();
 			this.startTick();
-			this.drawReadLink(containerEl, linked.cloudVaultId);
 			this.drawDashboard(containerEl);
 			return;
 		}
@@ -383,24 +371,6 @@ export class KnapSettingsTab extends PluginSettingTab {
 				}),
 		);
 		this.drawDashboard(containerEl);
-	}
-
-	/**
-	 * A read-only link to this cloud vault: anybody with it reads the notes as
-	 * plain pages (admin ADR-0111). Only once there is a link, because it is
-	 * about one cloud vault. The button opens that vault's Settings in the
-	 * browser, where the switch is: who may read a vault is the dashboard's to
-	 * set (ADR-0031), and a second switch here is how the two would disagree.
-	 */
-	private drawReadLink(containerEl: HTMLElement, cloudVaultId: string): void {
-		new Setting(containerEl)
-			.setName("Read-only link")
-			.setDesc("Let anybody with the link read this vault's notes. Set in your browser.")
-			.addButton((button) =>
-				button.setButtonText("Open").onClick(() => {
-					this.openPage(readLinkUrl(this.serverUrl, cloudVaultId));
-				}),
-			);
 	}
 
 	/**
