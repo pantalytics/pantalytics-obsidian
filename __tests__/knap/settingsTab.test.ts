@@ -12,7 +12,6 @@ import {
 	barSentence,
 	dashboardHelp,
 	dashboardUrl,
-	readLinkUrl,
 	hasFold,
 	hasRetry,
 	headCount,
@@ -383,12 +382,7 @@ describe("the screen, signed in", () => {
 		// Account, then the vault, then the way out. The order is what each
 		// row depends on: who, then which vault, then the page that reports on
 		// it. There is still no row about how much of the vault travels.
-		expect(rows.map((r) => r.name)).toEqual([
-			"Account",
-			"Cloud vault",
-			"Read-only link",
-			"Pantalytics dashboard",
-		]);
+		expect(rows.map((r) => r.name)).toEqual(["Account", "Cloud vault", "Pantalytics dashboard"]);
 		// Inside the vault's own block rather than beside it: one border round
 		// both, so the strip cannot be read as a third subject.
 		const block = find(container, "knap-vault");
@@ -406,7 +400,6 @@ describe("the screen, signed in", () => {
 			expect(rows.map((r) => r.name)).toEqual([
 				"Account",
 				"Cloud vault",
-				"Read-only link",
 				"Pantalytics dashboard",
 			]);
 		}
@@ -837,22 +830,6 @@ describe("the dashboard row", () => {
 		expect(dashboardHelp("https://next.knap.test/")).toBe(
 			"Opens next.knap.test in your browser. Add people to your workspace, connect your AI over MCP.",
 		);
-	});
-
-	it("opens this cloud vault's Settings for its read-only link, never sets it here", () => {
-		const linked = drawFor({ signedIn: true, linked: { id: "v 1", name: "Work" } });
-		linked.rows.find((r) => r.name === "Read-only link")?.press?.();
-		expect(linked.opened).toEqual([
-			"https://next.knap.test/admin/vaults/v%201/settings#read-link-h",
-		]);
-		expect(readLinkUrl("https://next.knap.test/", "abc")).toBe(
-			"https://next.knap.test/admin/vaults/abc/settings#read-link-h",
-		);
-	});
-
-	it("has no read-only link row before there is a link", () => {
-		const { rows } = drawFor({ signedIn: true, linked: null });
-		expect(rows.map((r) => r.name)).not.toContain("Read-only link");
 	});
 
 	it("does not double the slash a server address may come with", () => {

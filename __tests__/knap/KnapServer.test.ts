@@ -22,6 +22,34 @@ function fakeFetch(routes: Record<string, (init?: RequestInit) => Response>) {
 }
 
 describe("KnapServer", () => {
+	it("asks the dashboard for a note's read-only link, and says what it refused", async () => {
+		const { fetchFn, calls } = fakeFetch({
+			"/admin/api/vault-note-link": (init) => {
+				const body = JSON.parse(String(init?.body));
+				return body.path === "Plans/Q4.md"
+					? new Response(JSON.stringify({ link: "https://knap.test/admin/read/abc" }), {
+							status: 200,
+						})
+					: new Response(JSON.stringify({ error: "There is no note at 'x' in this vault." }), {
+							status: 404,
+						});
+			},
+		});
+		const server = new KnapServer("https://knap.test/", fetchFn);
+
+		expect(await server.noteLink("tok", "v1", "Plans/Q4.md")).toBe(
+			"https://knap.test/admin/read/abc",
+		);
+		expect(calls[0].url).toBe("https://knap.test/admin/api/vault-note-link");
+		expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+			vault_id: "v1",
+			path: "Plans/Q4.md",
+			on: true,
+		});
+		expect((calls[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+		await expect(server.noteLink("tok", "v1", "x")).rejects.toThrow(/no note at/);
+	});
+
 	it("exchanges a handoff code for a token, and refuses a reused one", async () => {
 		const { fetchFn, calls } = fakeFetch({
 			"/auth/plugin/exchange": (init) => {
