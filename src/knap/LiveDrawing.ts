@@ -29,6 +29,7 @@ import type { Awareness } from "y-protocols/awareness";
 
 import { ELEMENTS, type Element, beats, byIndex } from "./drawing";
 import { USER_FIELD, publishUser, type CursorUser } from "./NoteCursors";
+import { DrawingLatency, MEASURE_FIELD, SEEN_FIELD, type Seen, drawingLatency, keyOf } from "./drawingLatency";
 
 /** The awareness field holding a pointer on the canvas. */
 export const POINTER_FIELD = "pointer";
@@ -67,6 +68,9 @@ export class LiveDrawing {
 	private readonly held = new Map<string, Element>();
 	private readonly stops: (() => void)[] = [];
 	private pending = false;
+	/** When the first change since the last send came in, for #695's wait. */
+	private firstChangeAt = 0;
+	private announced = false;
 	private timer: number | null = null;
 	private destroyed = false;
 
@@ -75,6 +79,7 @@ export class LiveDrawing {
 		private readonly doc: Y.Doc,
 		private readonly awareness: Awareness,
 		private readonly who: string,
+		private readonly latency: DrawingLatency = drawingLatency,
 	) {
 		this.map = doc.getMap<string>(ELEMENTS);
 		for (const raw of this.map.values()) this.remember(raw);
@@ -88,8 +93,13 @@ export class LiveDrawing {
 				const element = this.remember(raw);
 				if (element) arrived.push(element);
 			}
+			const started = performance.now();
 			// An element the view holds that beats what arrived goes back.
 			if (!this.show(arrived)) this.schedule();
+			if (this.someoneMeasures()) {
+				const seen: Seen = { keys: arrived.map(keyOf), renderMs: performance.now() - started };
+				this.awareness.setLocalStateField(SEEN_FIELD, seen);
+			}
 		};
 		this.map.observe(onMap);
 		this.stops.push(() => this.map.unobserve(onMap));
@@ -105,7 +115,10 @@ export class LiveDrawing {
 				} satisfies Pointer);
 			}),
 		);
-		const onAwareness = () => this.showPointers();
+		const onAwareness = () => {
+			this.showPointers();
+			this.takeEchoes();
+		};
 		this.awareness.on("change", onAwareness);
 		this.stops.push(() => this.awareness.off("change", onAwareness));
 
@@ -125,11 +138,17 @@ export class LiveDrawing {
 			if (beats(element, this.held.get(element.id))) changed.push(element);
 		}
 		if (changed.length === 0) return;
+		const raws = changed.map((element) => JSON.stringify(element));
+		// Stamped before the write: a relay can echo before transact returns.
+		this.announceMeasuring();
+		const waitMs = this.firstChangeAt ? performance.now() - this.firstChangeAt : 0;
+		this.latency.sent(changed.map(keyOf), waitMs, raws.reduce((n, raw) => n + raw.length, 0));
+		this.firstChangeAt = 0;
 		this.doc.transact(() => {
-			for (const element of changed) {
-				this.map.set(element.id, JSON.stringify(element));
+			changed.forEach((element, i) => {
+				this.map.set(element.id, raws[i]);
 				this.held.set(element.id, element);
-			}
+			});
 		}, this);
 	}
 
@@ -140,12 +159,37 @@ export class LiveDrawing {
 		if (this.timer) window.clearTimeout(this.timer);
 		for (const stop of this.stops) stop();
 		this.awareness.setLocalStateField(POINTER_FIELD, null);
+		if (this.announced) this.awareness.setLocalStateField(MEASURE_FIELD, null);
 	}
 
 	private schedule(): void {
 		if (this.pending || this.destroyed) return;
 		this.pending = true;
+		this.firstChangeAt = performance.now();
 		this.timer = window.setTimeout(() => this.send(), SEND_EVERY_MS);
+	}
+
+	/** #695: tell the other devices to echo while this one measures. */
+	private announceMeasuring(): void {
+		if (this.latency.measuring === this.announced) return;
+		this.announced = this.latency.measuring;
+		this.awareness.setLocalStateField(MEASURE_FIELD, this.announced || null);
+	}
+
+	private someoneMeasures(): boolean {
+		for (const [clientId, state] of this.awareness.getStates()) {
+			if (clientId !== this.awareness.clientID && state[MEASURE_FIELD]) return true;
+		}
+		return false;
+	}
+
+	private takeEchoes(): void {
+		if (!this.latency.measuring) return;
+		for (const [clientId, state] of this.awareness.getStates()) {
+			if (clientId === this.awareness.clientID) continue;
+			const seen = state[SEEN_FIELD] as Seen | null | undefined;
+			if (seen && Array.isArray(seen.keys)) this.latency.echoed(seen);
+		}
 	}
 
 	private remember(raw: string): Element | null {

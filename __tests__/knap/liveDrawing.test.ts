@@ -12,6 +12,7 @@ import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protoc
 
 import { type Element, beats } from "../../src/knap/drawing";
 import { LiveDrawing, type ExcalidrawLike } from "../../src/knap/LiveDrawing";
+import { DrawingLatency, SEEN_FIELD, drawingLatency } from "../../src/knap/drawingLatency";
 
 class FakeExcalidraw implements ExcalidrawLike {
 	elements: Element[] = [];
@@ -199,5 +200,45 @@ describe("a drawing open on two screens", () => {
 		views[0].point(120, 80);
 		live[0].destroy();
 		expect(views[1].collaborators.size).toBe(0);
+	});
+});
+
+describe("measuring how long a stroke takes (odoo-mcp-pro-admin#695)", () => {
+	afterEach(() => drawingLatency.stop());
+
+	it("times each version from the drawer's send to the other screen's echo", () => {
+		const { relay, views, live } = twoViews();
+		drawingLatency.start();
+		const a = rect("a", "a0");
+		views[0].draw([a]);
+		live[0].send(); // announced before the write, so this one counts too
+		views[0].draw([moved(a, 10)]);
+		live[0].send();
+		views[0].draw([moved(moved(a, 10), 20)]);
+		live[0].send();
+		expect(drawingLatency.summary()).toMatch(/^3 updates measured\./);
+		expect(relay.awareness[1].getLocalState()?.[SEEN_FIELD]).toBeTruthy();
+	});
+
+	it("leaves the other screen's awareness alone when nobody measures", () => {
+		const { relay, views, live } = twoViews();
+		views[0].draw([rect("a", "a0")]);
+		live[0].send();
+		expect(relay.awareness[1].getLocalState()?.[SEEN_FIELD]).toBeUndefined();
+	});
+
+	it("splits the round trip without comparing the two clocks", () => {
+		let t = 0;
+		const latency = new DrawingLatency(() => t);
+		latency.start();
+		latency.sent(["a:2"], 40, 2048);
+		t = 30;
+		latency.echoed({ keys: ["a:2"], renderMs: 10 });
+		latency.echoed({ keys: ["a:2"], renderMs: 10 }); // a repeat counts once
+		const summary = latency.summary();
+		expect(summary).toContain("1 updates measured.");
+		expect(summary).toContain("Pen to screen: median 60 ms"); // 40 wait + 10 transit + 10 render
+		expect(summary).toContain("Transit: median 10 ms");
+		expect(summary).toContain("median 2.0 KB");
 	});
 });
