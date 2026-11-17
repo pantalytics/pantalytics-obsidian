@@ -43,7 +43,7 @@ import * as Y from "yjs";
 import { buildConflictCopyPath } from "../conflictCopyPath";
 import { generateHash } from "../hashing";
 import { knapFault } from "./faultSink";
-import { TREE_SYNC_FAILED, TREE_SYNC_TIMEOUT_MS, withTimeout } from "./deadline";
+import { RetryLater, TREE_SYNC_FAILED, TREE_SYNC_TIMEOUT_MS, withTimeout } from "./deadline";
 import { TreeDoc, isNote, normalize } from "./TreeDoc";
 import {
 	ELEMENTS,
@@ -206,6 +206,9 @@ function hashOf(text: string): Promise<string> {
 	return generateHash(new TextEncoder().encode(text));
 }
 
+/** When a note whose connection dropped is tried again by itself. */
+const RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000, 60_000];
+
 export class VaultBinding {
 	private stopFileEvents: (() => void) | null = null;
 	private stopTreeEvents: (() => void) | null = null;
@@ -218,6 +221,8 @@ export class VaultBinding {
 	private failures = 0;
 	/** Notes whose last attempt failed, and why, until one succeeds. */
 	private stuck = new Map<string, string>();
+	/** Notes being tried again by themselves after a lost connection. */
+	private retries = new Map<string, { attempt: number; timer: number }>();
 	/** Work taken on and not finished, by direction. Never edits. */
 	private outstanding = { up: 0, down: 0 };
 	/** The pass at start, counted as it goes. */
@@ -327,6 +332,8 @@ export class VaultBinding {
 		this.noteObservers.clear();
 		for (const timer of this.drawingWrites.values()) window.clearTimeout(timer);
 		this.drawingWrites.clear();
+		for (const { timer } of this.retries.values()) window.clearTimeout(timer);
+		this.retries.clear();
 	}
 
 	/** Wait for everything queued so far; tests and shutdown use it. */
@@ -356,6 +363,14 @@ export class VaultBinding {
 		return [...this.stuck].map(([path, reason]) => ({ path, reason }));
 	}
 
+	/** A note went through: it is neither stuck nor waiting to be tried again. */
+	private settled(path: string): void {
+		this.stuck.delete(path);
+		const retry = this.retries.get(path);
+		if (retry) window.clearTimeout(retry.timer);
+		this.retries.delete(path);
+	}
+
 	/**
 	 * Try one stuck note again: bring the cloud to the file when the file is
 	 * here, or the file to the cloud when it is not.
@@ -376,6 +391,18 @@ export class VaultBinding {
 			this.failures += 1;
 			return;
 		}
+		// A dropped connection or a wait that ran out says nothing about the
+		// note. It is tried again by itself, a little later each time, and
+		// only becomes a problem somebody sees once that has not worked.
+		const attempt = this.retries.get(path)?.attempt ?? 0;
+		if (error instanceof RetryLater && attempt < RETRY_DELAYS_MS.length) {
+			const timer = window.setTimeout(() => {
+				void this.retryNote(path).catch(() => undefined);
+			}, RETRY_DELAYS_MS[attempt]);
+			this.retries.set(path, { attempt: attempt + 1, timer });
+			return;
+		}
+		this.retries.delete(path);
 		const message = error instanceof Error ? error.message : String(error);
 		this.stuck.set(path, message.split("\n")[0].slice(0, 120));
 	}
@@ -547,7 +574,7 @@ export class VaultBinding {
 		const counted = async () => {
 			try {
 				await work();
-				if (path !== undefined) this.stuck.delete(path);
+				if (path !== undefined) this.settled(path);
 			} catch (error) {
 				this.failedOn(path, error);
 				// Rethrown, not swallowed. The rejection is what keeps
@@ -825,7 +852,7 @@ export class VaultBinding {
 				const path = typeof item === "string" ? item : (item as unknown as [string])[0];
 				try {
 					await work(item);
-					this.stuck.delete(path);
+					this.settled(path);
 				} catch (error) {
 					// The screen names the note and the reason; the fault says
 					// the same on a server somebody can look at. Before

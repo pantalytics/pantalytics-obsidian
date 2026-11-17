@@ -8,6 +8,7 @@
 
 import { KnapServer } from "../../src/knap/KnapServer";
 import { KnapVaultClient } from "../../src/knap/KnapVaultClient";
+import { RetryLater } from "../../src/knap/deadline";
 import { nameOf } from "../../src/knap/StuckNotesModal";
 import { VaultBinding } from "../../src/knap/VaultBinding";
 import { FakeNetwork, MemoryFiles } from "../mocks/fakeNetwork";
@@ -72,4 +73,36 @@ it("tries one stuck note again on its own", async () => {
 it("splits a path into the note's name and its folder", () => {
 	expect(nameOf("Clients/Acme/Renewal.md")).toEqual({ name: "Renewal", folder: "Clients/Acme" });
 	expect(nameOf("Inbox.md")).toEqual({ name: "Inbox", folder: "" });
+});
+
+it("tries a note whose connection dropped again by itself, without calling it a problem", async () => {
+	// #706: an iPhone that put Obsidian in the background showed seven notes
+	// as "Could not sync". The connection went, not the notes.
+	process.setMaxListeners(0);
+	const network = new FakeNetwork();
+	const server = new KnapServer("https://knap.test", async () => new Response("{}"));
+	const client = new KnapVaultClient(server, "v1", "knap_token", "Phone", network.socket);
+	const files = new MemoryFiles();
+	files.map.set("Clients/Acme.md", "# Acme\n");
+	let drops = 1;
+	const read = files.read.bind(files);
+	files.read = async (path: string) => {
+		if (drops > 0) {
+			drops -= 1;
+			throw new RetryLater("The connection dropped before this note was sent.");
+		}
+		return read(path);
+	};
+	const binding = new VaultBinding(files, client, () => "conflict");
+	await binding.start();
+	await binding.flush();
+	expect(binding.problems).toBe(0);
+	expect(binding.stuckNotes).toEqual([]);
+
+	await new Promise((resolve) => setTimeout(resolve, 2_500));
+	await binding.flush();
+	expect(client.tree().docIdFor("Clients/Acme.md")).toBeDefined();
+	expect(binding.problems).toBe(0);
+	binding.stop?.();
+	client.destroy?.();
 });

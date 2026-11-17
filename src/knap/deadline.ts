@@ -24,10 +24,19 @@ export const TREE_SYNC_TIMEOUT_MS = 30_000;
 /** What every caller says when the tree does not arrive. */
 export const TREE_SYNC_FAILED = "Could not reach the server. Nothing was changed; try again.";
 
+/**
+ * A failure that says nothing about the note: the connection went, or a wait
+ * ran out. The note is fine and the same attempt may well succeed a moment
+ * later, so the binding tries it again by itself rather than calling it a
+ * problem (odoo-mcp-pro-admin#706: an iPhone that put Obsidian in the
+ * background showed seven of these as "Could not sync").
+ */
+export class RetryLater extends Error {}
+
 /** Reject with `message` if `promise` has not settled in `ms`. */
 export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
-		const timer = window.setTimeout(() => reject(new Error(message)), ms);
+		const timer = window.setTimeout(() => reject(new RetryLater(message)), ms);
 		promise.then(
 			(value) => {
 				window.clearTimeout(timer);

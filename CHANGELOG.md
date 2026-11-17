@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- A note whose connection dropped is tried again by itself, after 2 seconds and then a little longer each time, instead of waiting for you to press Try again. On an iPhone this happens whenever Obsidian goes to the background, and it used to show those notes as **Could not sync**. Only a note that still fails after a few tries ends up on that list.
 - When a note will not sync, **Could not sync** in Settings now opens a page with the notes, the way a settings row does on an iPhone. Each note shows the reason it gave. Tap one to see it in full, try it again or open it, or try them all again at once. A note drops off the list as soon as it goes through.
 - A pen stroke in an open Excalidraw drawing now shows on the other screen while you draw it, the way shapes and text already did. It used to arrive seconds later, all at once: Pantalytics sent the first point of a stroke and then mistook every next point for one it had already sent, until Excalidraw saved the file.
 - While **Measure drawing speed** is on, the measured numbers also go to Pantalytics every ten seconds, so we can read them without asking you for a screenshot. Only counts, milliseconds and sizes, your platform and the plugin's version: nothing from your notes.
