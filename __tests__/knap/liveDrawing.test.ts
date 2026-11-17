@@ -203,6 +203,41 @@ describe("a drawing open on two screens", () => {
 	});
 });
 
+describe("a stroke while it is drawn (odoo-mcp-pro-admin#695)", () => {
+	it("goes out on every send, though Excalidraw changes the element in place", () => {
+		// Excalidraw's mutateElement adds a point to the very object in the
+		// scene and bumps its version there. The binding used to keep that
+		// object as "what the map has", so the two always looked equal and
+		// a pen stroke went out once, at its first point, until a file save.
+		const { views, live } = twoViews();
+		const stroke: Element = { ...rect("s", "a0"), type: "freedraw", points: [[0, 0]] };
+		views[0].draw([stroke]);
+		live[0].send();
+		for (let i = 1; i <= 3; i++) {
+			(stroke.points as number[][]).push([i, i]);
+			stroke.version += 1;
+			stroke.versionNonce = nonce++;
+			views[0].draw([stroke]);
+			live[0].send();
+			const shown = views[1].elements.find((e) => e.id === "s");
+			expect((shown?.points as number[][]).length).toBe(i + 1);
+		}
+	});
+
+	it("keeps a remote element apart from what the view later changes in place", () => {
+		const { views, live } = twoViews();
+		views[0].draw([rect("a", "a0")]);
+		live[0].send();
+		const theirs = views[1].elements[0];
+		theirs.x = 77;
+		theirs.version += 1;
+		theirs.versionNonce = nonce++;
+		views[1].draw([theirs]);
+		live[1].send();
+		expect(views[0].elements[0].x).toBe(77);
+	});
+});
+
 describe("measuring how long a stroke takes (odoo-mcp-pro-admin#695)", () => {
 	afterEach(() => drawingLatency.stop());
 

@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- A pen stroke in an open Excalidraw drawing now shows on the other screen while you draw it, the way shapes and text already did. It used to arrive seconds later, all at once: Pantalytics sent the first point of a stroke and then mistook every next point for one it had already sent, until Excalidraw saved the file.
 - While **Measure drawing speed** is on, the measured numbers also go to Pantalytics every ten seconds, so we can read them without asking you for a screenshot. Only counts, milliseconds and sizes, your platform and the plugin's version: nothing from your notes.
 - **Measure drawing speed**: run it from the command palette on the device you draw on, with the same drawing open on another device, then run **Show drawing speed**. It tells how long your strokes take to reach the other screen, split into waiting, the trip and drawing them there. Nothing is sent anywhere but the other device, and the numbers are gone when Obsidian closes.
 - Drawing alone in Excalidraw no longer leaves a conflict copy beside the drawing. Pantalytics counted your live strokes and your next save as two people, and when that save also had new text in it, it kept a copy as if somebody else had changed the drawing. A copy now only appears when two people both changed the text around a drawing.
