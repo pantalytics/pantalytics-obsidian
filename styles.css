@@ -676,23 +676,105 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/* The notes behind "Could not sync": the path, and under it what it said. */
-.knap-status-stuck {
+/* Could not sync opens its own page, like a settings row on an iPhone. */
+.knap-status-opens-stuck {
+	all: unset;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.knap-status-opens-stuck .knap-status-chevron {
+	color: var(--text-faint);
+	display: flex;
+}
+
+/* The page behind it: a list of notes, then one note. */
+.knap-stuck-all {
+	width: 100%;
+	margin-bottom: var(--size-4-3);
+}
+
+.knap-stuck-list {
 	display: flex;
 	flex-direction: column;
-	gap: var(--size-2-3);
-	font-size: var(--font-ui-small);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+	overflow: hidden;
 }
 
-.knap-status-stuck-path {
+.knap-stuck-row {
+	all: unset;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.knap-stuck-row:last-child {
+	border-bottom: none;
+}
+
+.knap-stuck-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.knap-stuck-name {
 	color: var(--text-normal);
-	overflow-wrap: anywhere;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-.knap-status-stuck-reason,
-.knap-status-stuck-more {
+.knap-stuck-reason,
+.knap-stuck-folder {
 	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.knap-stuck-chevron,
+.knap-stuck-back {
+	color: var(--text-faint);
+	display: flex;
+	align-items: center;
+}
+
+.knap-stuck-back {
+	all: unset;
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	color: var(--interactive-accent);
+	cursor: pointer;
+	margin-bottom: var(--size-4-2);
+}
+
+.knap-stuck-why {
+	margin: var(--size-4-3) 0;
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-small);
 	overflow-wrap: anywhere;
+	user-select: text;
+}
+
+.knap-stuck-buttons {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+.knap-stuck-empty,
+.knap-stuck-done {
+	color: var(--text-muted);
 }
 
 /* What the vault holds, ruled off from what is still moving. It is the line

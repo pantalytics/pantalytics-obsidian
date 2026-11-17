@@ -616,23 +616,20 @@ describe("the bar, a second later", () => {
 });
 
 describe("the notes behind Could not sync", () => {
-	it("names each stuck note and what it said, and counts the rest", () => {
-		// #706: "7 changes" and nothing else left somebody hunting for seven
-		// notes in four hundred, on a phone.
-		const stuckNotes = Array.from({ length: 7 }, (_, n) => ({
-			path: `Clients/Note ${n}.md`,
-			reason: `reason ${n}`,
-		}));
+	it("is one row with a chevron that opens a page of its own", () => {
+		// #706: the strip says that notes are stuck; which ones, and what to
+		// do, is one tap further in, the way an iPhone settings row opens.
+		const stuckNotes = [{ path: "Clients/Acme.md", reason: "EACCES" }];
 		const sync = fakeSync({
 			signedIn: true,
 			linked: { id: "v1", name: "Work notes" },
-			status: { word: PROBLEM, dot: "error", vaultName: "Work notes", problems: 7, stuckNotes },
+			status: { word: PROBLEM, dot: "error", vaultName: "Work notes", problems: 1, stuckNotes },
 		});
 		const { container } = drawWith(sync);
-		const paths = flatten(container).filter((n) => n.cls === "knap-status-stuck-path").map((el) => el.text);
-		expect(paths).toEqual([0, 1, 2, 3, 4].map((n) => `Clients/Note ${n}`));
-		expect(flatten(container).filter((n) => n.cls === "knap-status-stuck-reason")[0].text).toBe("reason 0");
-		expect(find(container, "knap-status-stuck-more")?.text).toBe("and 2 more");
+		const row = find(container, "knap-status-opens-stuck");
+		expect(row).toBeDefined();
+		expect(row?.listeners.length).toBe(1);
+		expect(find(container, "knap-stuck-row")).toBeUndefined(); // not inline
 	});
 });
 

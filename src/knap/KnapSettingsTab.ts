@@ -37,6 +37,7 @@
  */
 
 import { Notice, type Plugin, PluginSettingTab, Setting, setIcon } from "obsidian";
+import { StuckNotesModal } from "./StuckNotesModal";
 
 import {
 	DOWNLOADING,
@@ -129,7 +130,7 @@ export function statusFacts(status: KnapStatus): Array<[string, string]> {
 	if (coming) facts.push([DOWNLOADING, coming]);
 	if (status.problems > 0) {
 		facts.push([
-			"Could not sync",
+			STUCK,
 			`${status.problems} change${status.problems === 1 ? "" : "s"}`,
 		]);
 	}
@@ -470,6 +471,19 @@ export class KnapSettingsTab extends PluginSettingTab {
 	 * fold snap shut, read *Offline* again. It says it is going while it
 	 * goes, and says what went wrong when it does.
 	 */
+	/** The page behind Could not sync: which notes, why, and what to do. */
+	private openStuck(): void {
+		new StuckNotesModal(this.app, {
+			stuck: () => this.sync.status().stuckNotes,
+			retryAll: async () => {
+				const paths = this.sync.status().stuckNotes.map((note) => note.path);
+				await Promise.all(paths.map((path) => this.sync.retryNote(path)));
+			},
+			retryNote: (path) => this.sync.retryNote(path),
+			openNote: (path) => void this.app.workspace.openLinkText(path, "", false),
+		}).open();
+	}
+
 	private tryAgain(): void {
 		if (this.trying) return;
 		this.trying = true;
@@ -548,30 +562,24 @@ export class KnapSettingsTab extends PluginSettingTab {
 		if (instruction) {
 			body.createDiv({ cls: "knap-status-say", text: instruction });
 		}
+		const named = (status.stuckNotes ?? []).length > 0;
 		for (const [key, value] of statusFacts(status)) {
+			// The notes behind Could not sync are one tap further in, the
+			// way an iPhone settings row opens its own page (#706).
+			const opens = named && key === STUCK;
 			// The total is ruled off from the rows above it: those are what is
 			// still moving, and it is what is there when nothing is.
-			const row = body.createDiv({
-				cls: key === TOTAL ? "knap-status-fact knap-status-total" : "knap-status-fact",
-			});
+			const row = opens
+				? body.createEl("button", { cls: "knap-status-fact knap-status-opens-stuck" })
+				: body.createDiv({
+						cls: key === TOTAL ? "knap-status-fact knap-status-total" : "knap-status-fact",
+					});
 			row.createSpan({ cls: "knap-status-key", text: key });
 			row.createSpan({ cls: "knap-status-value", text: value });
-		}
-		const stuck = status.stuckNotes ?? [];
-		if (stuck.length > 0) {
-			// Which notes, and what each said, under the count. A number alone
-			// left somebody guessing which seven of four hundred (#706).
-			const list = body.createDiv({ cls: "knap-status-stuck" });
-			for (const { path, reason } of stuck.slice(0, STUCK_SHOWN)) {
-				const row = list.createDiv({ cls: "knap-status-stuck-note" });
-				row.createDiv({ cls: "knap-status-stuck-path", text: path.replace(/\.md$/, "") });
-				row.createDiv({ cls: "knap-status-stuck-reason", text: reason });
-			}
-			if (stuck.length > STUCK_SHOWN) {
-				list.createDiv({
-					cls: "knap-status-stuck-more",
-					text: `and ${stuck.length - STUCK_SHOWN} more`,
-				});
+			if (opens) {
+				(row as HTMLButtonElement).type = "button";
+				setIcon(row.createSpan({ cls: "knap-status-chevron" }) as HTMLElement, "chevron-right");
+				row.addEventListener("click", () => this.openStuck());
 			}
 		}
 		if (hasRetry(status)) {
@@ -586,8 +594,8 @@ export class KnapSettingsTab extends PluginSettingTab {
 	}
 }
 
-/** How many stuck notes the strip names before it says "and N more". */
-const STUCK_SHOWN = 5;
+/** The row that opens the list of notes that would not sync. */
+const STUCK = "Could not sync";
 
 /** The address without its scheme, because nobody reads https to a person. */
 function hostOf(serverUrl: string): string {

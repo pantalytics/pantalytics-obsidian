@@ -356,6 +356,21 @@ export class VaultBinding {
 		return [...this.stuck].map(([path, reason]) => ({ path, reason }));
 	}
 
+	/**
+	 * Try one stuck note again: bring the cloud to the file when the file is
+	 * here, or the file to the cloud when it is not.
+	 */
+	retryNote(path: string): Promise<void> {
+		return this.enqueue(async () => {
+			if ((await this.readNote(path)) !== null) {
+				await this.pushNote(path);
+				return;
+			}
+			const docId = this.docs.tree().docIdFor(path);
+			if (docId) await this.bindNote(path, docId);
+		}, path);
+	}
+
 	private failedOn(path: string | undefined, error: unknown): void {
 		if (path === undefined) {
 			this.failures += 1;

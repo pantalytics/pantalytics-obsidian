@@ -1046,6 +1046,11 @@ export class KnapSync {
 	 * reading: the word goes back to whatever is true after the retry rather
 	 * than staying red on the strength of what already happened.
 	 */
+	/** Try one note that would not sync again, without restarting the rest. */
+	async retryNote(path: string): Promise<void> {
+		await this.binding?.retryNote(path);
+	}
+
 	async retry(): Promise<void> {
 		this.stop();
 		await this.start();
