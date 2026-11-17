@@ -28,7 +28,7 @@
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 
-import { withTimeout } from "./deadline";
+import { RetryLater, withTimeout } from "./deadline";
 import type { KnapServer } from "./KnapServer";
 import { listenForNotices, type ServerNotice } from "./notices";
 import { TREE_DOC_ID, TreeDoc } from "./TreeDoc";
@@ -264,7 +264,7 @@ export class KnapVaultClient {
 		entry.provider.destroy();
 		// Anybody still waiting for this document's first sync is waiting for
 		// something that has stopped being on its way.
-		entry.failSynced(new Error("This note's connection closed before it synced."));
+		entry.failSynced(new RetryLater("This note's connection closed before it synced."));
 		// Watchers first, so whoever was following this document lets go of a
 		// document that is still whole, and then the document itself.
 		for (const watcher of [...this.closeWatchers]) watcher(docId);
@@ -376,11 +376,11 @@ export class KnapVaultClient {
 		for (;;) {
 			const socket = entry.provider.ws;
 			if (!entry.provider.wsconnected || !socket) {
-				throw new Error("The connection dropped before this note was sent.");
+				throw new RetryLater("The connection dropped before this note was sent.");
 			}
 			if (!socket.bufferedAmount) return;
 			if (Date.now() > deadline) {
-				throw new Error("This note could not be sent in time. It will be tried again.");
+				throw new RetryLater("This note could not be sent in time. It will be tried again.");
 			}
 			await new Promise<void>((resolve) => window.setTimeout(resolve, FLUSH_POLL_MS));
 		}

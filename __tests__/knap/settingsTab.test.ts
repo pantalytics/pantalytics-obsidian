@@ -615,6 +615,24 @@ describe("the bar, a second later", () => {
 	});
 });
 
+describe("the notes behind Could not sync", () => {
+	it("is one row with a chevron that opens a page of its own", () => {
+		// #706: the strip says that notes are stuck; which ones, and what to
+		// do, is one tap further in, the way an iPhone settings row opens.
+		const stuckNotes = [{ path: "Clients/Acme.md", reason: "EACCES" }];
+		const sync = fakeSync({
+			signedIn: true,
+			linked: { id: "v1", name: "Work notes" },
+			status: { word: PROBLEM, dot: "error", vaultName: "Work notes", problems: 1, stuckNotes },
+		});
+		const { container } = drawWith(sync);
+		const row = find(container, "knap-status-opens-stuck");
+		expect(row).toBeDefined();
+		expect(row?.listeners.length).toBe(1);
+		expect(find(container, "knap-stuck-row")).toBeUndefined(); // not inline
+	});
+});
+
 describe("what the fold holds", () => {
 	it("leaves out every fact it has nothing to say about", () => {
 		expect(statusFacts({ ...baseStatus() } as never)).toEqual([]);
