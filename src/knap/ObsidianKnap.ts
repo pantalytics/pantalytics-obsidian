@@ -25,6 +25,7 @@ import type { CloudVault } from "./KnapServer";
 import type { ServerNotice } from "./notices";
 import { knapLiveEditing } from "./knapEditor";
 import { followDrawings } from "./ObsidianDrawings";
+import { drawingLatency } from "./drawingLatency";
 import { KnapSync } from "./KnapSync";
 import type { KnapLink } from "./KnapSync";
 import { ObsidianConfigBases } from "./ObsidianConfigBases";
@@ -363,6 +364,30 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 	// The same for Excalidraw drawings: strokes and pointers while a drawing
 	// is open, per element (ADR-0109).
 	followDrawings(host, sync);
+
+	// How long a stroke takes to reach another screen (odoo-mcp-pro-admin#695).
+	host.addCommand({
+		id: "measure-drawing-speed",
+		name: "Measure drawing speed",
+		callback: () => {
+			if (drawingLatency.measuring) {
+				drawingLatency.stop();
+				new Notice("Stopped measuring drawing speed.");
+				return;
+			}
+			drawingLatency.start();
+			new Notice(
+				"Measuring drawing speed. Draw here with the same drawing open on another device, then run show drawing speed.",
+			);
+		},
+	});
+	host.addCommand({
+		id: "show-drawing-speed",
+		name: "Show drawing speed",
+		callback: () => {
+			new Notice(drawingLatency.summary(), 0);
+		},
+	});
 
 	host.registerObsidianProtocolHandler(SIGNIN_ACTION, (params) => {
 		const fed = sync.handleDeepLink(params as unknown as Record<string, string>);
