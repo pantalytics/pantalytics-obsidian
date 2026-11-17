@@ -66,6 +66,7 @@ export class LiveDrawing {
 	 * the map with whichever set it keeps, and `send` puts the winner back.
 	 */
 	private readonly held = new Map<string, Element>();
+	// Never an object the view holds: Excalidraw mutates those in place.
 	private readonly stops: (() => void)[] = [];
 	private pending = false;
 	/** When the first change since the last send came in, for #695's wait. */
@@ -147,7 +148,10 @@ export class LiveDrawing {
 		this.doc.transact(() => {
 			changed.forEach((element, i) => {
 				this.map.set(element.id, raws[i]);
-				this.held.set(element.id, element);
+				// A copy: Excalidraw adds a pen stroke's points to this very
+				// object and bumps its version in place, so holding the object
+				// itself made every later frame look already sent (#695).
+				this.held.set(element.id, { ...element });
 			});
 		}, this);
 	}
@@ -216,7 +220,9 @@ export class LiveDrawing {
 		for (const element of arrived) {
 			const mine = byId.get(element.id);
 			if (beats(element, mine)) {
-				byId.set(element.id, element);
+				// The view's own copy, for the same reason: what the view later
+				// changes in place must not change what the map is held to be.
+				byId.set(element.id, { ...element });
 				changed = true;
 			} else if (mine && beats(mine, element)) {
 				settled = false;
