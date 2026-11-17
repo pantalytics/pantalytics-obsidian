@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- While **Measure drawing speed** is on, the measured numbers also go to Pantalytics every ten seconds, so we can read them without asking you for a screenshot. Only counts, milliseconds and sizes, your platform and the plugin's version: nothing from your notes.
 - **Measure drawing speed**: run it from the command palette on the device you draw on, with the same drawing open on another device, then run **Show drawing speed**. It tells how long your strokes take to reach the other screen, split into waiting, the trip and drawing them there. Nothing is sent anywhere but the other device, and the numbers are gone when Obsidian closes.
 - Drawing alone in Excalidraw no longer leaves a conflict copy beside the drawing. Pantalytics counted your live strokes and your next save as two people, and when that save also had new text in it, it kept a copy as if somebody else had changed the drawing. A copy now only appears when two people both changed the text around a drawing.
 - **Copy read-only link** on a note or an Excalidraw drawing: right-click it, or run it from the command palette. Anybody with the link reads that one file in a browser, without an account, and can change nothing. A drawing shows as the drawing. Every link of a vault is listed under Settings on your Pantalytics dashboard, where you turn it off.

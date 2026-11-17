@@ -26,6 +26,7 @@ import type { ServerNotice } from "./notices";
 import { knapLiveEditing } from "./knapEditor";
 import { followDrawings } from "./ObsidianDrawings";
 import { drawingLatency } from "./drawingLatency";
+import { sendSpeedReport, setSpeedCredential, startSpeedReports } from "./ObsidianSpeedReport";
 import { KnapSync } from "./KnapSync";
 import type { KnapLink } from "./KnapSync";
 import { ObsidianConfigBases } from "./ObsidianConfigBases";
@@ -168,7 +169,13 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 	// The sync layer files its faults through an injected sink so that nothing
 	// in src/knap has to import Obsidian (see faultSink.ts). This is the one
 	// place that connects the two, and it is set before anything can fail.
-	setFaultSink({ report: reportFault, credential: setFaultCredential });
+	setFaultSink({
+		report: reportFault,
+		credential: (token) => {
+			setFaultCredential(token);
+			setSpeedCredential(token);
+		},
+	});
 
 	const device = `${host.app.vault.getName()} on ${Platform.isMobileApp ? "phone" : "desktop"}`;
 	const sync = new KnapSync({
@@ -371,16 +378,18 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 		name: "Measure drawing speed",
 		callback: () => {
 			if (drawingLatency.measuring) {
-				drawingLatency.stop();
+				// What was measured since the last report goes out before it stops.
+				void sendSpeedReport(host).finally(() => drawingLatency.stop());
 				new Notice("Stopped measuring drawing speed.");
 				return;
 			}
 			drawingLatency.start();
 			new Notice(
-				"Measuring drawing speed. Draw here with the same drawing open on another device, then run show drawing speed.",
+				"Measuring drawing speed. Draw here with the same drawing open on another device. The numbers go to Pantalytics, without anything from your notes.",
 			);
 		},
 	});
+	startSpeedReports(host);
 	host.addCommand({
 		id: "show-drawing-speed",
 		name: "Show drawing speed",
