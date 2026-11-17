@@ -231,6 +231,12 @@ export class VaultBinding {
 	 * down beside the tree, so a restart still knows which side moved.
 	 */
 	private bases = new Map<string, string>();
+	/**
+	 * Per drawing's document id, the text around the scene when this device
+	 * last agreed on it. In memory only: without it a drawing settles the
+	 * way it did before #690 in odoo-mcp-pro-admin, which is safe.
+	 */
+	private drawingTexts = new Map<string, string>();
 	/** Set whenever a base changed, cleared when it is saved. */
 	private basesDirty = false;
 	/**
@@ -475,9 +481,12 @@ export class VaultBinding {
 	 */
 	private async agree(docId: string, text: string): Promise<void> {
 		this.agreeHash(docId, await hashOf(text));
+		const around = text.includes("## Drawing\n```") ? parseDrawing(text)?.text : undefined;
+		if (around !== undefined) this.drawingTexts.set(docId, around);
 	}
 
 	private agreeHash(docId: string, hash: string): void {
+		this.drawingTexts.delete(docId);
 		if (this.bases.get(docId) === hash) return;
 		this.bases.set(docId, hash);
 		this.basesDirty = true;
@@ -1010,10 +1019,25 @@ export class VaultBinding {
 		}
 		const incoming = parseDrawing(fileText);
 		if (!incoming) return undefined;
-		const docMoved =
-			docText !== "" && (base === undefined || (await hashOf(docText)) !== base);
-		const clash = docMoved && textOfDocument(doc) !== incoming.text;
-		ingestDrawing(doc, fileText, !clash);
+		const held = textOfDocument(doc);
+		const was = this.drawingTexts.get(docId);
+		let clash: boolean;
+		let takeText: boolean;
+		if (was !== undefined) {
+			// Only the text can clash; the elements merge whoever moved them.
+			// So the question is whether both sides changed the text, not the
+			// file: this device's own strokes reach the map live (LiveDrawing)
+			// and its save a few seconds later is the same person (#690).
+			const fileMoved = incoming.text !== was;
+			clash = fileMoved && held !== was && held !== incoming.text;
+			takeText = fileMoved && !clash;
+		} else {
+			const docMoved =
+				docText !== "" && (base === undefined || (await hashOf(docText)) !== base);
+			clash = docMoved && held !== incoming.text;
+			takeText = !clash;
+		}
+		ingestDrawing(doc, fileText, takeText);
 		const merged = renderDocument(doc);
 		if (merged !== fileText) await this.files.write(path, merged);
 		await this.agree(docId, merged);
