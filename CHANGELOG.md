@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- When a note will not sync, Settings now names it. Under **Could not sync** you see each note's path and the reason it gave, so you know which ones to look at. A note drops off the list as soon as it goes through, and **Try again** tries them all once more.
 - A pen stroke in an open Excalidraw drawing now shows on the other screen while you draw it, the way shapes and text already did. It used to arrive seconds later, all at once: Pantalytics sent the first point of a stroke and then mistook every next point for one it had already sent, until Excalidraw saved the file.
 - While **Measure drawing speed** is on, the measured numbers also go to Pantalytics every ten seconds, so we can read them without asking you for a screenshot. Only counts, milliseconds and sizes, your platform and the plugin's version: nothing from your notes.
 - **Measure drawing speed**: run it from the command palette on the device you draw on, with the same drawing open on another device, then run **Show drawing speed**. It tells how long your strokes take to reach the other screen, split into waiting, the trip and drawing them there. Nothing is sent anywhere but the other device, and the numbers are gone when Obsidian closes.

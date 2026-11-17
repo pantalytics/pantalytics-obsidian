@@ -557,6 +557,23 @@ export class KnapSettingsTab extends PluginSettingTab {
 			row.createSpan({ cls: "knap-status-key", text: key });
 			row.createSpan({ cls: "knap-status-value", text: value });
 		}
+		const stuck = status.stuckNotes ?? [];
+		if (stuck.length > 0) {
+			// Which notes, and what each said, under the count. A number alone
+			// left somebody guessing which seven of four hundred (#706).
+			const list = body.createDiv({ cls: "knap-status-stuck" });
+			for (const { path, reason } of stuck.slice(0, STUCK_SHOWN)) {
+				const row = list.createDiv({ cls: "knap-status-stuck-note" });
+				row.createDiv({ cls: "knap-status-stuck-path", text: path.replace(/\.md$/, "") });
+				row.createDiv({ cls: "knap-status-stuck-reason", text: reason });
+			}
+			if (stuck.length > STUCK_SHOWN) {
+				list.createDiv({
+					cls: "knap-status-stuck-more",
+					text: `and ${stuck.length - STUCK_SHOWN} more`,
+				});
+			}
+		}
 		if (hasRetry(status)) {
 			const retry = body.createEl("button", {
 				cls: "knap-status-retry",
@@ -568,6 +585,9 @@ export class KnapSettingsTab extends PluginSettingTab {
 		}
 	}
 }
+
+/** How many stuck notes the strip names before it says "and N more". */
+const STUCK_SHOWN = 5;
 
 /** The address without its scheme, because nobody reads https to a person. */
 function hostOf(serverUrl: string): string {

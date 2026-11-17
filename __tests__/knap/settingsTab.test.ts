@@ -615,6 +615,27 @@ describe("the bar, a second later", () => {
 	});
 });
 
+describe("the notes behind Could not sync", () => {
+	it("names each stuck note and what it said, and counts the rest", () => {
+		// #706: "7 changes" and nothing else left somebody hunting for seven
+		// notes in four hundred, on a phone.
+		const stuckNotes = Array.from({ length: 7 }, (_, n) => ({
+			path: `Clients/Note ${n}.md`,
+			reason: `reason ${n}`,
+		}));
+		const sync = fakeSync({
+			signedIn: true,
+			linked: { id: "v1", name: "Work notes" },
+			status: { word: PROBLEM, dot: "error", vaultName: "Work notes", problems: 7, stuckNotes },
+		});
+		const { container } = drawWith(sync);
+		const paths = flatten(container).filter((n) => n.cls === "knap-status-stuck-path").map((el) => el.text);
+		expect(paths).toEqual([0, 1, 2, 3, 4].map((n) => `Clients/Note ${n}`));
+		expect(flatten(container).filter((n) => n.cls === "knap-status-stuck-reason")[0].text).toBe("reason 0");
+		expect(find(container, "knap-status-stuck-more")?.text).toBe("and 2 more");
+	});
+});
+
 describe("what the fold holds", () => {
 	it("leaves out every fact it has nothing to say about", () => {
 		expect(statusFacts({ ...baseStatus() } as never)).toEqual([]);

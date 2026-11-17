@@ -120,6 +120,8 @@ export interface KnapStatus {
 	attachments: number;
 	/** Pieces of work that failed and stayed failed. */
 	problems: number;
+	/** The notes among those, by path, with the reason each gave. */
+	stuckNotes: Array<{ path: string; reason: string }>;
 	/** Notes this device still has to send to the cloud vault. */
 	up: number;
 	/** Notes the cloud vault lists that are not on this device yet. */
@@ -326,6 +328,7 @@ export class KnapSync {
 			notes: this.client ? this.client.tree().entries().size : 0,
 			attachments: this.client ? this.client.tree().attachments().size : 0,
 			problems,
+			stuckNotes: this.binding?.stuckNotes ?? [],
 			up: backlog.up,
 			down: backlog.down,
 			files,

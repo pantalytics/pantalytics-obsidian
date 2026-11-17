@@ -214,7 +214,10 @@ export class VaultBinding {
 	/** A drawing's file write waiting for its document to go quiet, by id. */
 	private drawingWrites = new Map<string, number>();
 	private queue: Promise<void> = Promise.resolve();
+	/** Work that failed with no note to name: a pass, a tree change. */
 	private failures = 0;
+	/** Notes whose last attempt failed, and why, until one succeeds. */
+	private stuck = new Map<string, string>();
 	/** Work taken on and not finished, by direction. Never edits. */
 	private outstanding = { up: 0, down: 0 };
 	/** The pass at start, counted as it goes. */
@@ -274,7 +277,7 @@ export class VaultBinding {
 			// filter that let only `.md` through would drop the one event
 			// that takes those notes out of the tree.
 			if (!isNote(event.path) && event.type !== "delete") return;
-			void this.enqueue(() => this.onFileEvent(event));
+			void this.enqueue(() => this.onFileEvent(event), event.path);
 		});
 		this.stopTreeEvents = this.docs.tree().onChange((change) => {
 			void this.enqueue(async () => {
@@ -341,7 +344,25 @@ export class VaultBinding {
 	 * remembering to.
 	 */
 	get problems(): number {
-		return this.failures;
+		return this.failures + this.stuck.size;
+	}
+
+	/**
+	 * Which notes those are, and the reason each gave, so the screen can name
+	 * them. A number alone sent somebody looking for seven notes in four
+	 * hundred (odoo-mcp-pro-admin#706). The paths stay on this device.
+	 */
+	get stuckNotes(): Array<{ path: string; reason: string }> {
+		return [...this.stuck].map(([path, reason]) => ({ path, reason }));
+	}
+
+	private failedOn(path: string | undefined, error: unknown): void {
+		if (path === undefined) {
+			this.failures += 1;
+			return;
+		}
+		const message = error instanceof Error ? error.message : String(error);
+		this.stuck.set(path, message.split("\n")[0].slice(0, 120));
 	}
 
 	/**
@@ -424,7 +445,7 @@ export class VaultBinding {
 			if (released) return;
 			released = true;
 			this.held.delete(clean);
-			void this.enqueue(() => this.writeFromDocument(clean));
+			void this.enqueue(() => this.writeFromDocument(clean), clean);
 		};
 	}
 
@@ -453,7 +474,7 @@ export class VaultBinding {
 			if (closed) return;
 			closed = true;
 			this.drawingsOpen.delete(clean);
-			void this.enqueue(() => this.writeFromDocument(clean));
+			void this.enqueue(() => this.writeFromDocument(clean), clean);
 		};
 	}
 
@@ -507,12 +528,13 @@ export class VaultBinding {
 		});
 	}
 
-	private enqueue(work: () => Promise<void>): Promise<void> {
+	private enqueue(work: () => Promise<void>, path?: string): Promise<void> {
 		const counted = async () => {
 			try {
 				await work();
+				if (path !== undefined) this.stuck.delete(path);
 			} catch (error) {
-				this.failures += 1;
+				this.failedOn(path, error);
 				// Rethrown, not swallowed. The rejection is what keeps
 				// rememberTree below off the failure path, and the queue's own
 				// handler is what keeps one failure from stopping the next unit.
@@ -785,14 +807,16 @@ export class VaultBinding {
 		const worker = async (): Promise<void> => {
 			while (next < items.length) {
 				const item = items[next++];
+				const path = typeof item === "string" ? item : (item as unknown as [string])[0];
 				try {
 					await work(item);
+					this.stuck.delete(path);
 				} catch (error) {
-					// The count is what the screen reads; the fault is what
-					// says which note and why, on a server somebody can look
-					// at. Before ADR-0095 a note that would not sync was a
-					// number on a card and nothing else, anywhere.
-					this.failures += 1;
+					// The screen names the note and the reason; the fault says
+					// the same on a server somebody can look at. Before
+					// ADR-0095 a note that would not sync was a number on a
+					// card and nothing else, anywhere.
+					this.failedOn(path, error);
 					knapFault("sync", error);
 				} finally {
 					// Done or failed, this piece is behind us either way.
@@ -1158,7 +1182,7 @@ export class VaultBinding {
 				}
 				await this.files.write(current, next);
 				await this.agree(docId, next);
-			});
+			}, path);
 		};
 		content.observe(observer);
 		// A drawing's elements live beside the Text, and a stroke from

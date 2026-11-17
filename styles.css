@@ -676,6 +676,25 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* The notes behind "Could not sync": the path, and under it what it said. */
+.knap-status-stuck {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-3);
+	font-size: var(--font-ui-small);
+}
+
+.knap-status-stuck-path {
+	color: var(--text-normal);
+	overflow-wrap: anywhere;
+}
+
+.knap-status-stuck-reason,
+.knap-status-stuck-more {
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
+}
+
 /* What the vault holds, ruled off from what is still moving. It is the line
    somebody holds against Knap's own page, so it is there under every word. */
 .knap-status-total {
