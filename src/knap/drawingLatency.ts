@@ -14,8 +14,10 @@
  * - render: the receiver's updateScene;
  * - pen to screen: the three together.
  *
- * Nothing leaves the two devices: ids and versions ride the awareness the
- * pointers already use, and the numbers stay in memory (ADR-0003).
+ * Ids and versions ride the awareness the pointers already use. While
+ * measuring, the numbers (counts, milliseconds and bytes, nothing else) go
+ * to Pantalytics every few seconds, so they can be read without anybody
+ * reading a notice off a screen (ADR-0003: no path, no content).
  */
 
 /** On the drawer's awareness while it measures: receivers echo only then. */
@@ -26,6 +28,20 @@ export const SEEN_FIELD = "drawingSeen";
 export interface Seen {
 	keys: string[];
 	renderMs: number;
+}
+
+/** What one batch of measurements says, numbers only (ADR-0003). */
+export interface SpeedReport {
+	n: number;
+	penMedianMs: number;
+	penP95Ms: number;
+	penMaxMs: number;
+	waitMedianMs: number;
+	transitMedianMs: number;
+	transitP95Ms: number;
+	renderMedianMs: number;
+	bytesMedian: number;
+	bytesMax: number;
 }
 
 interface Sample {
@@ -45,6 +61,8 @@ export class DrawingLatency {
 	measuring = false;
 	private pending = new Map<string, { at: number; waitMs: number; bytes: number }>();
 	private samples: Sample[] = [];
+	/** How many samples went into a report already. */
+	private reported = 0;
 
 	constructor(private readonly now: () => number = () => performance.now()) {}
 
@@ -52,6 +70,7 @@ export class DrawingLatency {
 		this.measuring = true;
 		this.pending.clear();
 		this.samples = [];
+		this.reported = 0;
 	}
 
 	stop(): void {
@@ -78,7 +97,33 @@ export class DrawingLatency {
 			const transitMs = Math.max(0, (at - sent.at - seen.renderMs) / 2);
 			this.samples.push({ waitMs: sent.waitMs, transitMs, renderMs: seen.renderMs, bytes: sent.bytes });
 		}
-		if (this.samples.length > KEEP) this.samples.splice(0, this.samples.length - KEEP);
+		if (this.samples.length > KEEP) {
+			const dropped = this.samples.length - KEEP;
+			this.samples.splice(0, dropped);
+			this.reported = Math.max(0, this.reported - dropped);
+		}
+	}
+
+	/** The samples since the last report, summed up; null when there are none. */
+	takeReport(): SpeedReport | null {
+		const fresh = this.samples.slice(this.reported);
+		this.reported = this.samples.length;
+		if (fresh.length === 0) return null;
+		const pen = fresh.map((s) => s.waitMs + s.transitMs + s.renderMs);
+		const transit = fresh.map((s) => s.transitMs);
+		const bytes = fresh.map((s) => s.bytes);
+		return {
+			n: fresh.length,
+			penMedianMs: Math.round(median(pen)),
+			penP95Ms: Math.round(p95(pen)),
+			penMaxMs: Math.round(Math.max(...pen)),
+			waitMedianMs: Math.round(median(fresh.map((s) => s.waitMs))),
+			transitMedianMs: Math.round(median(transit)),
+			transitP95Ms: Math.round(p95(transit)),
+			renderMedianMs: Math.round(median(fresh.map((s) => s.renderMs))),
+			bytesMedian: Math.round(median(bytes)),
+			bytesMax: Math.max(...bytes),
+		};
 	}
 
 	/** One paragraph a person can read off a notice, or "nothing yet". */
@@ -103,10 +148,13 @@ function median(values: number[]): number {
 	return sorted[Math.floor((sorted.length - 1) / 2)];
 }
 
-function stats(values: number[]): string {
+function p95(values: number[]): number {
 	const sorted = [...values].sort((a, b) => a - b);
-	const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
-	return `median ${Math.round(median(values))} ms, p95 ${Math.round(p95)} ms, max ${Math.round(sorted[sorted.length - 1])} ms`;
+	return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+}
+
+function stats(values: number[]): string {
+	return `median ${Math.round(median(values))} ms, p95 ${Math.round(p95(values))} ms, max ${Math.round(Math.max(...values))} ms`;
 }
 
 function kb(bytes: number): string {

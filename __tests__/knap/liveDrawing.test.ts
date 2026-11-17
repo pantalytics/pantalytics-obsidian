@@ -241,4 +241,28 @@ describe("measuring how long a stroke takes (odoo-mcp-pro-admin#695)", () => {
 		expect(summary).toContain("Transit: median 10 ms");
 		expect(summary).toContain("median 2.0 KB");
 	});
+
+	it("reports only what came in since the last report, numbers only", () => {
+		let t = 0;
+		const latency = new DrawingLatency(() => t);
+		expect(latency.takeReport()).toBeNull();
+		latency.start();
+		latency.sent(["a:2", "a:3"], 40, 2048);
+		t = 30;
+		latency.echoed({ keys: ["a:2", "a:3"], renderMs: 10 });
+		const report = latency.takeReport();
+		expect(report).toEqual({
+			n: 2,
+			penMedianMs: 60,
+			penP95Ms: 60,
+			penMaxMs: 60,
+			waitMedianMs: 40,
+			transitMedianMs: 10,
+			transitP95Ms: 10,
+			renderMedianMs: 10,
+			bytesMedian: 2048,
+			bytesMax: 2048,
+		});
+		expect(latency.takeReport()).toBeNull();
+	});
 });
