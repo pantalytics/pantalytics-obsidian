@@ -39,7 +39,7 @@
 		"@types/diff-match-patch": "^1.0.36",
 		"@types/eventsource": "^1.1.15",
 		"@types/jest": "^29.5.12",
-		"@types/node": "^16.11.6",
+		"@types/node": "^26.6.6",
 		"@types/path-browserify": "^1.0.2",
 		"@typescript-eslint/eslint-plugin": "^8.54.0",
 		"@typescript-eslint/parser": "^8.54.0",
