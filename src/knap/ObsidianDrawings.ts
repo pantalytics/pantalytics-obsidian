@@ -19,6 +19,7 @@ import type { Awareness } from "y-protocols/awareness";
 import type { Element } from "./drawing";
 import { isDrawing } from "./drawing";
 import { LiveDrawing, type ExcalidrawLike } from "./LiveDrawing";
+import { rejectPalms } from "./palmRest";
 
 /** What `KnapSync.openDrawing` hands a view: the document, held open. */
 export interface LiveDrawingHandle {
@@ -127,6 +128,11 @@ export function followDrawings(host: Plugin, source: DrawingSource): void {
 			bound.set(leaf, { path, api, live, handle });
 		}
 	};
+
+	// A palm resting on an iPad must not draw, pan or end the pen's stroke.
+	host.register(
+		rejectPalms(window, document, (pointer) => new PointerEvent("pointerup", { ...pointer, pointerType: "touch", bubbles: true })),
+	);
 
 	host.registerEvent(host.app.workspace.on("layout-change", check));
 	host.registerEvent(host.app.workspace.on("file-open", check));
