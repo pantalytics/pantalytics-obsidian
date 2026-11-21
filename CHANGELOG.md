@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- On an iPad, a hand resting on the screen no longer messes up what you write with the pen in an Excalidraw drawing. Excalidraw took your palm for a second pen: the stroke got points where your hand lay, ended in a long straight line to it, or the canvas moved instead of drawing. While the pen touches a drawing, Pantalytics now keeps your hand away from Excalidraw. Without the pen, your fingers pan and zoom as before. Tested with Excalidraw 0.18, the version inside the Excalidraw plugin 2.29.
 - A note whose connection dropped is tried again by itself, after 2 seconds and then a little longer each time, instead of waiting for you to press Try again. On an iPhone this happens whenever Obsidian goes to the background, and it used to show those notes as **Could not sync**. Only a note that still fails after a few tries ends up on that list.
 - When a note will not sync, **Could not sync** in Settings now opens a page with the notes, the way a settings row does on an iPhone. Each note shows the reason it gave. Tap one to see it in full, try it again or open it, or try them all again at once. A note drops off the list as soon as it goes through.
 - A pen stroke in an open Excalidraw drawing now shows on the other screen while you draw it, the way shapes and text already did. It used to arrive seconds later, all at once: Pantalytics sent the first point of a stroke and then mistook every next point for one it had already sent, until Excalidraw saved the file.
