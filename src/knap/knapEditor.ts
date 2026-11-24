@@ -169,6 +169,8 @@ class KnapEditorPlugin implements PluginValue {
 	private path: string | null = null;
 	/** The note this editor is waiting on, and how to stop waiting. */
 	private waitingFor: string | null = null;
+	/** The editor's text when the wait began, before anything typed in it. */
+	private waitedFrom = "";
 	private stopWaiting: (() => void) | null = null;
 	private onAwareness: (changes: unknown, origin: unknown) => void;
 	/** A redraw is already on its way; the next one would draw the same. */
@@ -204,7 +206,7 @@ class KnapEditorPlugin implements PluginValue {
 		this.unbind();
 		const note = this.source.openNote(path);
 		if (!note) {
-			this.waitFor(path);
+			this.waitFor(path, pending?.before ?? this.view.state.doc.toString());
 			return;
 		}
 		this.cancelWait();
@@ -239,15 +241,19 @@ class KnapEditorPlugin implements PluginValue {
 	 * an empty page somebody may start typing in (issue #169). Binding lets
 	 * `LiveNote` fill it from the document before the first save.
 	 */
-	private waitFor(path: string): void {
+	private waitFor(path: string, before: string): void {
 		if (this.waitingFor === path || !this.source.whenSynced) return;
 		this.cancelWait();
 		this.waitingFor = path;
+		this.waitedFrom = before;
 		this.stopWaiting = this.source.whenSynced(path, () => {
 			this.stopWaiting = null;
 			this.waitingFor = null;
 			if (this.pathOf(this.view.state) !== path) return;
-			this.bind();
+			// What was typed during the wait goes into the note. Bound
+			// without it, the document won and took it back out of the
+			// editor a second after it was typed.
+			this.bind({ before: this.waitedFrom });
 			// So the decorations are drawn now rather than on the next keystroke.
 			if (this.live) this.redraw();
 		});
