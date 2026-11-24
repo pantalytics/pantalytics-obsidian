@@ -131,11 +131,47 @@ export class LiveNote {
 			else this.pushText(documentText, editorText);
 			return;
 		}
+		if (pending && !pending.changes && documentText !== "") {
+			this.mergeWait(pending.before, editorText, documentText);
+			return;
+		}
 		if (documentText === "") {
 			this.pushText("", editorText);
 			return;
 		}
 		const change = minimalChange(editorText, documentText);
+		if (change) {
+			this.view.dispatch({
+				changes: change,
+				annotations: [fromDocument.of(true)],
+				scrollIntoView: false,
+			});
+		}
+	}
+
+	/**
+	 * Both moved while the editor waited for its socket: the typing is the
+	 * editor's change from `before`, the document's is somebody else's or
+	 * Obsidian's own save of the first half of that typing.
+	 *
+	 * Apart, both stay: the typing goes into the document at its shifted
+	 * place and the editor takes the rest. On the same spot the editor wins,
+	 * because there the document's change is almost always the save that
+	 * carried part of this very typing; dropped is a second person editing
+	 * that exact spot in the same second, whose edit gives way.
+	 */
+	private mergeWait(before: string, editorText: string, documentText: string): void {
+		const mine = minimalChange(before, editorText);
+		const theirs = minimalChange(before, documentText);
+		if (!mine || !theirs || (mine.from <= theirs.to && theirs.from <= mine.to)) {
+			this.pushText(documentText, editorText);
+			return;
+		}
+		const shift = mine.from >= theirs.to ? theirs.insert.length - (theirs.to - theirs.from) : 0;
+		const merged =
+			documentText.slice(0, mine.from + shift) + mine.insert + documentText.slice(mine.to + shift);
+		this.pushText(documentText, merged);
+		const change = minimalChange(editorText, merged);
 		if (change) {
 			this.view.dispatch({
 				changes: change,
