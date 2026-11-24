@@ -134,6 +134,20 @@ describe("LiveNote", () => {
 		expect(content.toString()).toBe("wat de cloud heeft\n");
 	});
 
+	it("keeps what was typed while the editor waited for the note's socket", () => {
+		// Opened, typed in, and bound a second later once the socket synced:
+		// the document still holds what the editor held before the typing.
+		const doc = new Y.Doc();
+		const content = doc.getText("content");
+		content.insert(0, "# Dag\n");
+		const editor = new StubEditor("# Dag\nnet getypt\n");
+
+		new LiveNote(editor, content, new Awareness(doc), "Laptop").align({ before: "# Dag\n" });
+
+		expect(editor.text).toBe("# Dag\nnet getypt\n");
+		expect(content.toString()).toBe("# Dag\nnet getypt\n");
+	});
+
 	it("fills an empty document from the editor rather than emptying the note", () => {
 		const doc = new Y.Doc();
 		const content = doc.getText("content");

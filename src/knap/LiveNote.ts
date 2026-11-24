@@ -73,12 +73,15 @@ export function minimalChange(
 }
 
 /**
- * Keystrokes the editor took in the same update that bound it: the text it
- * held just before them, and the changes themselves.
+ * Typing the editor took before it was bound: the text it held just before,
+ * and, when it was all in the update that bound it, the changes themselves.
+ * Without `changes` the difference between `before` and the editor is the
+ * typing: an editor that waited for its note's socket kept everything typed
+ * meanwhile, and only its text from before the wait says what that was.
  */
 export interface PendingTyping {
 	before: string;
-	changes: ChangeSet;
+	changes?: ChangeSet;
 }
 
 export class LiveNote {
@@ -124,7 +127,8 @@ export class LiveNote {
 		const documentText = textOf(this.text);
 		if (editorText === documentText) return;
 		if (pending && pending.before === documentText) {
-			this.pushChanges(pending.changes);
+			if (pending.changes) this.pushChanges(pending.changes);
+			else this.pushText(documentText, editorText);
 			return;
 		}
 		if (documentText === "") {
