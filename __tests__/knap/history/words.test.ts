@@ -10,6 +10,7 @@ import {
 	createdAt,
 	dayLabel,
 	groupVersions,
+	typedBy,
 	lastChange,
 	madeBy,
 	personName,
@@ -35,15 +36,11 @@ function version(id: string, ms: number, kind: NoteVersion["actor_kind"], email:
 }
 
 describe("how a version was made", () => {
-	it("says it in the dashboard's words", () => {
-		expect(madeBy({ actor_kind: "typed", actor_email: "a@b" })).toBe("Typed in Obsidian");
-		expect(madeBy({ actor_kind: "tool", actor_email: "a@b" })).toBe("Written by AI for a@b");
-		expect(madeBy({ actor_kind: "tool", actor_email: null })).toBe("Written by AI");
-		expect(madeBy({ actor_kind: "panel", actor_email: "daniel@acme.nl" })).toBe(
-			"Put back by daniel@acme.nl",
-		);
-		expect(madeBy({ actor_kind: "panel", actor_email: null })).toBe("Put back");
-		expect(madeBy({ actor_kind: null, actor_email: null })).toBe("Not recorded");
+	it("says what the version holds: the note after typing, or before an AI edit or a restore", () => {
+		expect(madeBy({ actor_kind: "typed" })).toBe("Typed in Obsidian");
+		expect(madeBy({ actor_kind: "tool" })).toBe("Before an AI edit");
+		expect(madeBy({ actor_kind: "panel" })).toBe("Before a restore");
+		expect(madeBy({ actor_kind: null })).toBe("Not recorded");
 	});
 });
 
@@ -78,32 +75,60 @@ describe("times", () => {
 });
 
 describe("the versions, by day", () => {
-	it("groups newest first under Today, Yesterday and the date", () => {
+	const typing = (started: number, ts: number, email: string | null, platform: string | null, device = "Laptop") => ({
+		started: started / 1000,
+		ts: ts / 1000,
+		kind: "device" as const,
+		subject: null,
+		device,
+		platform,
+		actor_email: email,
+	});
+
+	it("groups newest first and names who typed from the edit rows, never from the version", () => {
 		const groups = groupVersions(
 			[
-				version("v4", at(26, 14, 2), "typed", "daniel@acme.nl"),
-				version("v3", at(26, 9, 30), "tool", null),
+				version("v4", at(26, 14, 2), "typed", null),
+				version("v3", at(26, 9, 30), "tool", "rutger@pantalytics.com"),
 				version("v2", at(25, 18, 0), "panel", "eva@acme.nl"),
 				version("v1", at(12, 8, 0), null, null),
 			],
 			NOW,
+			[typing(at(26, 13, 50), at(26, 14, 1), "daniel@acme.nl", "iphone")],
 		);
 		expect(groups.map((g) => g.label)).toEqual(["Today", "Yesterday", "12 Nov"]);
 		expect(groups[0].rows).toEqual([
-			{ id: "v4", at: at(26, 14, 2), time: "14:02", who: "Daniel", how: "Typed in Obsidian" },
-			{ id: "v3", at: at(26, 9, 30), time: "09:30", who: "", how: "Written by AI" },
+			{ id: "v4", at: at(26, 14, 2), time: "14:02", who: "Daniel on iPhone", how: "Typed in Obsidian" },
+			{ id: "v3", at: at(26, 9, 30), time: "09:30", who: "Rutger", how: "Before an AI edit" },
 		]);
-		expect(groups[1].rows[0].how).toBe("Put back by eva@acme.nl");
-		expect(groups[2].rows[0].how).toBe("Not recorded");
+		expect(groups[1].rows[0]).toMatchObject({ who: "Eva", how: "Before a restore" });
+		expect(groups[2].rows[0]).toMatchObject({ who: "", how: "Not recorded" });
 	});
 
-	it("names the person only on a typed version, since the how already holds the address", () => {
-		const [group] = groupVersions([version("v5", at(26, 10, 0), "tool", "daniel@acme.nl")], NOW);
-		expect(group.rows[0]).toMatchObject({ who: "", how: "Written by AI for daniel@acme.nl" });
+	it("names nobody on a typed version when no edit row covers its stretch", () => {
+		const [group] = groupVersions(
+			[version("v2", at(26, 14, 0), "typed", null), version("v1", at(26, 10, 0), "typed", null)],
+			NOW,
+			[typing(at(26, 9, 0), at(26, 9, 30), "daniel@acme.nl", "mac")],
+		);
+		expect(group.rows.map((r) => r.who)).toEqual(["", "Daniel on Mac"]);
 	});
 
 	it("is empty for no versions", () => {
 		expect(groupVersions([], NOW)).toEqual([]);
+	});
+});
+
+describe("who typed a stretch", () => {
+	it("lists each device once, and falls back to the device name without an address", () => {
+		const rows = [
+			{ started: 100, ts: 150, kind: "device" as const, subject: null, device: "Work Mac", platform: "mac", actor_email: null },
+			{ started: 120, ts: 160, kind: "device" as const, subject: null, device: "x", platform: "iphone", actor_email: "daniel@acme.nl" },
+			{ started: 130, ts: 170, kind: "device" as const, subject: null, device: "x", platform: "iphone", actor_email: "daniel@acme.nl" },
+			{ started: 140, ts: 180, kind: "tool" as const, subject: "s", device: null, platform: null, actor_email: "rutger@pantalytics.com" },
+		];
+		expect(typedBy(rows, 90, 200)).toBe("Work Mac on Mac, Daniel on iPhone");
+		expect(typedBy(rows, 200, 300)).toBe("");
 	});
 });
 

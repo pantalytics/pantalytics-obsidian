@@ -20,7 +20,7 @@ import { cornerItems } from "./cornerMenu";
 import { FRESH_MS, HistoryService } from "./HistoryService";
 import { VersionHistoryView, VIEW_HISTORY } from "./VersionHistoryView";
 import { VersionView, VIEW_VERSION } from "./VersionView";
-import { createdAt, lastChange, madeBy, shortDate, statusLine } from "./words";
+import { createdAt, lastChange, madeBy, shortDate, statusLine, versionWho } from "./words";
 
 /** How long the corner's menu waits for a history it does not have, before it opens without it. */
 const MENU_WAIT_MS = 600;
@@ -56,15 +56,17 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 
 	/** Open one version in the main area, reusing the version tab if one is open. */
 	const openVersion = (path: string, versionId: VersionId) => {
-		const version = service
-			.peek(path, Infinity)
-			?.versions.find((v) => String(v.id) === String(versionId));
+		const history = service.peek(path, Infinity);
+		const versions = history?.versions ?? [];
+		const index = versions.findIndex((v) => String(v.id) === String(versionId));
+		const version = index >= 0 ? versions[index] : undefined;
+		const who = version ? versionWho(version, versions[index + 1]?.ts ?? 0, history?.activity ?? []) : "";
 		const leaf = app.workspace.getLeavesOfType(VIEW_VERSION)[0] ?? app.workspace.getLeaf("tab");
 		void leaf
 			.setViewState({
 				type: VIEW_VERSION,
 				active: true,
-				state: { path, versionId, how: version ? madeBy(version) : undefined },
+				state: { path, versionId, how: version ? (who ? `${who} · ${madeBy(version)}` : madeBy(version)) : undefined },
 			})
 			.then(() => app.workspace.revealLeaf(leaf));
 	};

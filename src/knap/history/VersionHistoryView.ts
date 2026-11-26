@@ -111,7 +111,7 @@ export class VersionHistoryView extends ItemView {
 	}
 
 	private drawVersions(el: HTMLElement, path: string, history: NoteHistory | null): void {
-		const groups = groupVersions(history?.versions ?? [], Date.now());
+		const groups = groupVersions(history?.versions ?? [], Date.now(), history?.activity ?? []);
 		if (groups.length === 0) {
 			this.muted(el, "No versions yet.");
 			return;

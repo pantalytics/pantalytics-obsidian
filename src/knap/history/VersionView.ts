@@ -156,7 +156,7 @@ export class VersionView extends ItemView {
 		const head = el.createDiv({ cls: "knap-version-head" });
 		const words = head.createDiv();
 		words.createDiv({ cls: "knap-version-when", text: capital(versionWhen(version.ts * 1000, Date.now())) });
-		const how = this.state?.how ?? madeBy({ actor_kind: null, actor_email: null });
+		const how = this.state?.how ?? madeBy({ actor_kind: null });
 		words.createDiv({ cls: "knap-history-muted", text: how });
 		const buttons = head.createDiv({ cls: "knap-version-buttons" });
 		buttons.createEl("button", { text: "Close" }).addEventListener("click", () => this.leaf.detach());

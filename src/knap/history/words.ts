@@ -1,9 +1,9 @@
 /**
  * The words of a note's history, the same ones the dashboard uses.
  *
- * How a version was made is `made_by` in the admin repository's
- * `vault_history.py`, word for word, so a person moving between Obsidian and
- * the dashboard reads one history and not two. Everything here is pure and
+ * How a version was made matches `made_by` in the admin repository's
+ * `vault_history.py`, so a person moving between Obsidian and the dashboard
+ * reads one history and not two. Everything here is pure and
  * takes `now`, so the tests pin it without a clock.
  */
 
@@ -11,18 +11,68 @@ import type { NoteActivity, NoteVersion, VersionId } from "../KnapServer";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** How a version was made, in the dashboard's words. */
-export function madeBy(version: Pick<NoteVersion, "actor_kind" | "actor_email">): string {
+/**
+ * What a version is, from how the server took it (admin knap_server/history.py).
+ *
+ * The three kinds are not three of the same thing. A typed version is the
+ * note as it stood after typing, taken when the server wrote its copy. A
+ * version of kind "tool" or "panel" is the note as it stood just BEFORE an AI
+ * edit or a restore: the server keeps the text a write replaces, so that it
+ * can be put back. Saying "Written by AI" over the text the AI replaced was
+ * wrong, and it was what the dashboard said too.
+ */
+export function madeBy(version: Pick<NoteVersion, "actor_kind">): string {
 	switch (version.actor_kind) {
 		case "typed":
 			return "Typed in Obsidian";
 		case "tool":
-			return version.actor_email ? `Written by AI for ${version.actor_email}` : "Written by AI";
+			return "Before an AI edit";
 		case "panel":
-			return version.actor_email ? `Put back by ${version.actor_email}` : "Put back";
+			return "Before a restore";
 		default:
 			return "Not recorded";
 	}
+}
+
+const PLATFORM_WORDS: Record<string, string> = {
+	mac: "Mac",
+	windows: "Windows",
+	linux: "Linux",
+	ipad: "iPad",
+	iphone: "iPhone",
+	android: "Android",
+};
+
+/**
+ * Who typed what a typed version holds: every device the server saw editing
+ * the note between the version before it and this one (admin ADR-0115). A
+ * version names nobody itself, because one capture covers every device in the
+ * note; the edit rows are recorded at the socket and are facts. Empty when
+ * there is no row for that stretch, which is said as nothing rather than as a
+ * guess.
+ */
+export function typedBy(activity: readonly NoteActivity[], from: number, to: number): string {
+	const names: string[] = [];
+	for (const row of activity) {
+		if (row.kind !== "device") continue;
+		if (row.started > to || row.ts <= from) continue;
+		const who = personName(row.actor_email) || (row.device ?? "").trim();
+		if (!who) continue;
+		const platform = PLATFORM_WORDS[row.platform ?? ""];
+		const name = platform ? `${who} on ${platform}` : who;
+		if (!names.includes(name)) names.push(name);
+	}
+	return names.join(", ");
+}
+
+/** Who a version is about: the typists for a typed one, the person behind the AI edit or the restore otherwise. */
+export function versionWho(
+	version: Pick<NoteVersion, "actor_kind" | "actor_email" | "ts">,
+	previousTs: number,
+	activity: readonly NoteActivity[],
+): string {
+	if (version.actor_kind === "typed") return typedBy(activity, previousTs, version.ts);
+	return personName(version.actor_email);
 }
 
 /**
@@ -111,9 +161,13 @@ export interface VersionGroup {
 }
 
 /** The versions, grouped Today / Yesterday / by date, in the order given (newest first). */
-export function groupVersions(versions: readonly NoteVersion[], now: number): VersionGroup[] {
+export function groupVersions(
+	versions: readonly NoteVersion[],
+	now: number,
+	activity: readonly NoteActivity[] = [],
+): VersionGroup[] {
 	const groups: VersionGroup[] = [];
-	for (const version of versions) {
+	versions.forEach((version, index) => {
 		const at = version.ts * 1000;
 		const label = dayLabel(at, now);
 		let group = groups[groups.length - 1];
@@ -121,16 +175,15 @@ export function groupVersions(versions: readonly NoteVersion[], now: number): Ve
 			group = { label, rows: [] };
 			groups.push(group);
 		}
+		const previousTs = versions[index + 1]?.ts ?? 0;
 		group.rows.push({
 			id: version.id,
 			at,
 			time: clock(at),
-			// The address is in the how already for an AI's version and one
-			// put back, so it is not said twice on one row.
-			who: version.actor_kind === "typed" ? personName(version.actor_email) : "",
+			who: versionWho(version, previousTs, activity),
 			how: madeBy(version),
 		});
-	}
+	});
 	return groups;
 }
 

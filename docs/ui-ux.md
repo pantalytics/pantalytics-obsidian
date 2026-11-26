@@ -325,7 +325,7 @@ an old one back. Three places, all Obsidian's own parts: a `Menu`, an
   └─────────────────────────────────┘ │ Daniel · Typed in Obsidian   │
                                       │ Yesterday                    │
                                       │ 18:40                        │
-                                      │ Written by AI                │
+                                      │ Rutger · Before an AI edit   │
                                       └──────────────────────────────┘
 ```
 
@@ -341,9 +341,15 @@ when the history was asked for in the last half minute, and otherwise waits
 at most 0.6 s for it, opening without *Last changed* rather than hanging.
 
 **The sidebar** follows the open note: its name, *Created*, and the versions
-grouped *Today*, *Yesterday* and by date, each a time, a person and how it
-was made, in the dashboard's words (*Typed in Obsidian*, *Written by AI for …*,
-*Put back by …*, *Not recorded*). *Created* is the file's date, or the oldest
+grouped *Today*, *Yesterday* and by date, each a time, a person and what it
+holds. The server takes a version two ways, and the words follow the data, not
+a guess: *Typed in Obsidian* is the note after typing, and the person is every
+device the server saw editing it since the version before (the edit rows of
+admin ADR-0115; nobody when there is no row). *Before an AI edit* and *Before
+a restore* are the text a write replaced, kept so it can be put back, with the
+person the AI worked for or who restored. A version never says *Written by
+AI*: the server does not keep what the AI wrote as a version, only what was
+there before it. *Not recorded* is a version from before ADR-0083. *Created* is the file's date, or the oldest
 version's when that is earlier: a note that arrived through sync carries the
 day it landed on this device. A note without history says *No versions
 yet.* and nothing else. A quick answer never shows *Loading...*: that line
