@@ -159,7 +159,7 @@ export class VersionView extends ItemView {
 		const how = this.state?.how ?? madeBy({ actor_kind: null });
 		words.createDiv({ cls: "knap-history-muted", text: how });
 		const buttons = head.createDiv({ cls: "knap-version-buttons" });
-		buttons.createEl("button", { text: "Close" }).addEventListener("click", () => this.leaf.detach());
+		buttons.createEl("button", { text: "Close" }).addEventListener("click", () => void this.backToNote());
 		this.restoreTip = null;
 		this.restoreWrap = buttons.createSpan({ cls: "knap-version-restore" });
 		this.restoreButton = this.restoreWrap.createEl("button", { cls: "mod-cta", text: "Restore" });
@@ -186,6 +186,30 @@ export class VersionView extends ItemView {
 		setTooltip(wrap, reachable ? "" : "Restore needs a connection.");
 	}
 
+	/**
+	 * Leave the version for the note as it is now. Detaching alone let Obsidian
+	 * pick whatever tab was next, often another note. Where the note is open in
+	 * a tab already, that tab comes forward and this one closes; otherwise this
+	 * tab becomes the note.
+	 */
+	private async backToNote(): Promise<void> {
+		const path = this.state?.path;
+		const file = path ? this.app.vault.getAbstractFileByPath(path) : null;
+		if (!(file instanceof TFile)) {
+			this.leaf.detach();
+			return;
+		}
+		const open = this.app.workspace
+			.getLeavesOfType("markdown")
+			.find((leaf) => leaf !== this.leaf && (leaf.view as { file?: TFile | null }).file?.path === file.path);
+		if (open) {
+			this.app.workspace.setActiveLeaf(open, { focus: true });
+			this.leaf.detach();
+			return;
+		}
+		await this.leaf.openFile(file);
+	}
+
 	private askRestore(): void {
 		const state = this.state;
 		const version = this.version;
@@ -203,7 +227,7 @@ export class VersionView extends ItemView {
 		try {
 			await this.service.restore(version.id, state.path);
 			new Notice("Restored");
-			this.leaf.detach();
+			await this.backToNote();
 		} catch (error) {
 			new Notice(failureText(error, "Restore needs a connection."));
 		} finally {
