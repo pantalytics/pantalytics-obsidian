@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Note panel in the right sidebar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#a68af9}a:hover{color:#c4b5fd}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; display: flex; flex-direction: column; background: #1e1e1e; color: #dadada; font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; font-size: 14px; overflow: hidden">
+  <div style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #262626; border-bottom: 1px solid #363636; font-size: 13px; color: #a3a3a3">
+    <span style="padding: 4px 12px; background: #1e1e1e; border-radius: 6px 6px 0 0; color: #dadada">Acme renewal 2027</span>
+  </div>
+  <div style="flex: 1; display: flex; min-height: 0">
+    <div style="width: 220px; background: #262626; border-right: 1px solid #363636; padding: 14px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #b3b3b3">
+      <div style="font-size: 11px; letter-spacing: .04em; color: #8a8a8a; padding: 0 8px 6px">WORK NOTES</div>
+      <div style="padding: 4px 8px">Clients</div>
+      <div style="padding: 4px 8px 4px 22px">Acme</div>
+      <div style="padding: 4px 8px 4px 36px; background: #363636; border-radius: 4px; color: #ececec">Acme renewal 2027</div>
+      <div style="padding: 4px 8px 4px 36px">Kickoff notes</div>
+      <div style="padding: 4px 8px">Meetings</div>
+    </div>
+    <div style="flex: 1; padding: 48px 32px 0; display: flex; justify-content: center; overflow: hidden; min-width: 0">
+      <div style="width: 560px; display: flex; flex-direction: column; gap: 14px; line-height: 1.6">
+        <h1 style="margin: 0; font-size: 28px; color: #ececec">Acme renewal 2027</h1>
+        <p style="margin: 0">Contract ends 31 January. Daniel spoke with their CFO on Monday; they want a two-year term and a price freeze on the support hours.</p>
+        <h2 style="margin: 8px 0 0; font-size: 20px; color: #ececec">Open points</h2>
+        <p style="margin: 0">- Support hours: 40 a month, or a pool per quarter<br>- Odoo upgrade to 19 before the renewal date<br>- Who signs on their side</p>
+      </div>
+    </div>
+
+    <div style="width: 320px; background: #262626; border-left: 1px solid #363636; display: flex; flex-direction: column; font-size: 13px; min-height: 0">
+      <div style="height: 40px; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid #363636; color: #8a8a8a">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"></path><path d="M15 7h2a5 5 0 1 1 0 10h-2"></path><path d="M8 12h8"></path></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"></path><path d="M7 12h14"></path><path d="M11 18h10"></path></svg>
+        <span style="display: inline-flex; padding: 4px; border-radius: 4px; background: #363636; color: #4ade80"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"></path><path d="M21 3v5h-5"></path><path d="M3 21v-5h5"></path></svg></span>
+      </div>
+      <div style="padding: 14px 16px 4px; font-weight: 600; color: #ececec">Acme renewal 2027</div>
+      <div style="padding: 6px 16px 12px; display: grid; grid-template-columns: 96px minmax(0, 1fr); row-gap: 6px; column-gap: 10px">
+        <span style="color: #9a9a9a">Created</span><span>12 Nov</span>
+      </div>
+
+      <div style="padding: 12px 16px 6px; border-top: 1px solid #363636; font-size: 11px; letter-spacing: .04em; color: #8a8a8a">VERSION HISTORY</div>
+      <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 0 8px">
+        <div style="padding: 6px 8px 4px; color: #8a8a8a; font-size: 12px">Today</div>
+        <sc-for list="{{ today }}" as="v" hint-placeholder-count="3">
+          <a href="Version.dc.html" style="display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 8px; padding: 7px 8px; border-radius: 4px; text-decoration: none; color: #dadada; background: {{ v.bg }}">
+            <span style="color: #b3b3b3">{{ v.time }}</span>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+              <span>{{ v.who }}</span>
+              <span style="color: {{ v.howColor }}; font-size: 12px">{{ v.how }}</span>
+            </span>
+          </a>
+        </sc-for>
+        <div style="padding: 10px 8px 4px; color: #8a8a8a; font-size: 12px">Yesterday</div>
+        <sc-for list="{{ yesterday }}" as="v" hint-placeholder-count="2">
+          <a href="Version.dc.html" style="display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 8px; padding: 7px 8px; border-radius: 4px; text-decoration: none; color: #dadada">
+            <span style="color: #b3b3b3">{{ v.time }}</span>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+              <span>{{ v.who }}</span>
+              <span style="color: {{ v.howColor }}; font-size: 12px">{{ v.how }}</span>
+            </span>
+          </a>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <div style="height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 18px; padding: 0 12px; background: #262626; border-top: 1px solid #363636; font-size: 12px; color: #a3a3a3">
+    <span>727 words</span><span>4,623 characters</span>
+    <span style="color: #4ade80; display: inline-flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"></path><path d="M21 3v5h-5"></path><path d="M3 21v-5h5"></path></svg></span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const typed = '#9a9a9a', ai = '#9a9a9a', restored = '#9a9a9a';
+    return {
+      today: [
+        { time: '14:02', who: 'Daniel, iPhone', how: 'Typed in Obsidian', howColor: typed, bg: '#363636' },
+        { time: '13:10', who: 'Rutger', how: 'Written by AI', howColor: ai, bg: 'transparent' },
+        { time: '09:31', who: 'Rutger, Mac', how: 'Typed in Obsidian', howColor: typed, bg: 'transparent' }
+      ],
+      yesterday: [
+        { time: '16:44', who: 'Rutger', how: 'Put back', howColor: restored },
+        { time: '11:05', who: 'Daniel, Mac', how: 'Typed in Obsidian', howColor: typed }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

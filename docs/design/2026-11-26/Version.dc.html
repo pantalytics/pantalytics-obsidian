@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One version with Restore</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#a68af9}a:hover{color:#c4b5fd}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; display: flex; flex-direction: column; background: #1e1e1e; color: #dadada; font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; font-size: 14px; overflow: hidden">
+  <div style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #262626; border-bottom: 1px solid #363636; font-size: 13px; color: #a3a3a3">
+    <span style="padding: 4px 12px; background: #1e1e1e; border-radius: 6px 6px 0 0; color: #dadada">Acme renewal 2027 (today 13:10)</span>
+  </div>
+  <div style="flex: 1; display: flex; min-height: 0">
+    <div style="width: 220px; background: #262626; border-right: 1px solid #363636; padding: 14px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #b3b3b3">
+      <div style="font-size: 11px; letter-spacing: .04em; color: #8a8a8a; padding: 0 8px 6px">WORK NOTES</div>
+      <div style="padding: 4px 8px">Clients</div>
+      <div style="padding: 4px 8px 4px 22px">Acme</div>
+      <div style="padding: 4px 8px 4px 36px; background: #363636; border-radius: 4px; color: #ececec">Acme renewal 2027</div>
+      <div style="padding: 4px 8px 4px 36px">Kickoff notes</div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; min-width: 0">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: #2a2a2a; border-bottom: 1px solid #363636">
+        <span style="font-weight: 600; color: #ececec">Today 13:10</span>
+        <span style="color: #9a9a9a">Rutger, written by AI</span>
+        <button type="button" style="margin-left: auto; height: 30px; padding: 0 14px; border: 1px solid #404040; border-radius: 6px; background: transparent; color: #dadada; font: inherit; font-size: 13px; cursor: pointer">Close</button>
+        <button type="button" style="height: 30px; padding: 0 14px; border: 0; border-radius: 6px; background: #8b6cf6; color: #fff; font: inherit; font-size: 13px; cursor: pointer">Restore</button>
+      </div>
+      <div style="flex: 1; padding: 36px 32px 0; display: flex; justify-content: center; overflow: hidden">
+        <div style="width: 560px; display: flex; flex-direction: column; gap: 14px; line-height: 1.6">
+          <h1 style="margin: 0; font-size: 28px; color: #ececec">Acme renewal 2027</h1>
+          <p style="margin: 0">Contract ends 31 January. Daniel spoke with their CFO on Monday; they want a two-year term<span style="background: rgba(248,113,113,.18); color: #fca5a5; text-decoration: line-through"> and a price freeze on the support hours</span>.</p>
+          <h2 style="margin: 8px 0 0; font-size: 20px; color: #ececec">Open points</h2>
+          <p style="margin: 0">- Support hours: 40 a month, or a pool per quarter<br><span style="background: rgba(74,222,128,.16); color: #86efac">- Price freeze: their main ask, decide before the call</span><br>- Odoo upgrade to 19 before the renewal date<br>- Who signs on their side</p>
+        </div>
+      </div>
+    </div>
+    <div style="width: 320px; background: #262626; border-left: 1px solid #363636; display: flex; flex-direction: column; font-size: 13px">
+      <div style="padding: 14px 16px 4px; font-weight: 600; color: #ececec">Acme renewal 2027</div>
+      <div style="padding: 12px 16px 6px; font-size: 11px; letter-spacing: .04em; color: #8a8a8a">VERSION HISTORY</div>
+      <div style="padding: 0 8px; display: flex; flex-direction: column">
+        <div style="padding: 6px 8px 4px; color: #8a8a8a; font-size: 12px">Today</div>
+        <div style="display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 8px; padding: 7px 8px"><span style="color: #b3b3b3">14:02</span><span>Daniel, iPhone<br><span style="color: #9a9a9a; font-size: 12px">Typed in Obsidian</span></span></div>
+        <div style="display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 8px; padding: 7px 8px; background: #3a3550; border-radius: 4px"><span style="color: #ececec">13:10</span><span>Rutger<br><span style="color: #b3b3b3; font-size: 12px">Written by AI</span></span></div>
+        <div style="display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 8px; padding: 7px 8px"><span style="color: #b3b3b3">09:31</span><span>Rutger, Mac<br><span style="color: #9a9a9a; font-size: 12px">Typed in Obsidian</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
