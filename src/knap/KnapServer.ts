@@ -50,9 +50,12 @@ export interface HttpAnswer {
 	arrayBuffer(): Promise<ArrayBuffer>;
 }
 
+/** A version's id: an integer on the wire, carried as given and compared as text. */
+export type VersionId = number | string;
+
 /** One saved version of a note, newest first in a history. */
 export interface NoteVersion {
-	id: string;
+	id: VersionId;
 	path: string;
 	/** When it was saved, in epoch seconds. */
 	ts: number;
@@ -83,7 +86,7 @@ export interface NoteHistory {
 
 /** One version with its text. */
 export interface VersionText {
-	id: string;
+	id: VersionId;
 	doc_id: string;
 	path: string;
 	ts: number;
@@ -233,9 +236,9 @@ export class KnapServer {
 	}
 
 	/** One version's text. */
-	async version(token: string, vaultId: string, versionId: string): Promise<VersionText> {
+	async version(token: string, vaultId: string, versionId: VersionId): Promise<VersionText> {
 		const response = await this.fetchFn(
-			`${this.vaultApi(vaultId)}/versions/${encodeURIComponent(versionId)}`,
+			`${this.vaultApi(vaultId)}/versions/${encodeURIComponent(String(versionId))}`,
 			{ headers: { Authorization: `Bearer ${token}` } },
 		);
 		if (response.status === 404) {
@@ -256,10 +259,10 @@ export class KnapServer {
 	async restore(
 		token: string,
 		vaultId: string,
-		versionId: string,
+		versionId: VersionId,
 	): Promise<{ path: string; doc_id: string; revived: boolean }> {
 		const response = await this.fetchFn(
-			`${this.vaultApi(vaultId)}/versions/${encodeURIComponent(versionId)}/restore`,
+			`${this.vaultApi(vaultId)}/versions/${encodeURIComponent(String(versionId))}/restore`,
 			{ method: "POST", headers: { Authorization: `Bearer ${token}` } },
 		);
 		if (response.status === 404) {

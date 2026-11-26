@@ -7,7 +7,7 @@
  * takes `now`, so the tests pin it without a clock.
  */
 
-import type { NoteActivity, NoteVersion } from "../KnapServer";
+import type { NoteActivity, NoteVersion, VersionId } from "../KnapServer";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -17,7 +17,7 @@ export function madeBy(version: Pick<NoteVersion, "actor_kind" | "actor_email">)
 		case "typed":
 			return "Typed in Obsidian";
 		case "tool":
-			return "Written by AI";
+			return version.actor_email ? `Written by AI for ${version.actor_email}` : "Written by AI";
 		case "panel":
 			return version.actor_email ? `Put back by ${version.actor_email}` : "Put back";
 		default:
@@ -70,6 +70,16 @@ export function dayLabel(ms: number, now: number): string {
 	return shortDate(ms, now);
 }
 
+/**
+ * When a note was created, as best this device can say: the file's own date,
+ * or the oldest version when that is earlier. A note that arrived through
+ * sync carries the day it landed here, which the history can correct.
+ */
+export function createdAt(fileCtime: number, versions: readonly NoteVersion[] | undefined): number {
+	const oldest = versions && versions.length > 0 ? versions[versions.length - 1].ts * 1000 : Infinity;
+	return Math.min(fileCtime, oldest);
+}
+
 /** How long ago, short: just now, 3 min ago, 2 h ago, yesterday, 4 days ago, 12 Nov. */
 export function ago(ms: number, now: number): string {
 	const seconds = Math.max(0, Math.floor((now - ms) / 1000));
@@ -86,7 +96,7 @@ export function ago(ms: number, now: number): string {
 
 /** One row of the sidebar: when, who, how. */
 export interface VersionRow {
-	id: string;
+	id: VersionId;
 	/** Epoch milliseconds. */
 	at: number;
 	time: string;
@@ -115,7 +125,9 @@ export function groupVersions(versions: readonly NoteVersion[], now: number): Ve
 			id: version.id,
 			at,
 			time: clock(at),
-			who: personName(version.actor_email),
+			// The address is in the how already for an AI's version and one
+			// put back, so it is not said twice on one row.
+			who: version.actor_kind === "typed" ? personName(version.actor_email) : "",
 			how: madeBy(version),
 		});
 	}
@@ -139,10 +151,15 @@ export function lastChange(
 ): { who: string; when: string } | null {
 	const newest = activity[0];
 	if (!newest) return null;
+	const person = personName(newest.actor_email);
+	// An AI's edit is the AI's, on somebody's behalf: naming the person alone
+	// would say they typed it.
 	const who =
-		personName(newest.actor_email) ||
-		(newest.device ?? "").trim() ||
-		(newest.kind === "tool" ? "AI" : "Someone");
+		newest.kind === "tool"
+			? person
+				? `AI for ${person}`
+				: "AI"
+			: person || (newest.device ?? "").trim() || "Someone";
 	return { who, when: ago(newest.ts * 1000, now) };
 }
 

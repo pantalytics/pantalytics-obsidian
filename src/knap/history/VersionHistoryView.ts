@@ -14,9 +14,9 @@
 import { ItemView, TFile, type WorkspaceLeaf } from "obsidian";
 
 import { PLUGIN_ID } from "../../pluginId";
-import type { NoteHistory } from "../KnapServer";
+import type { NoteHistory, VersionId } from "../KnapServer";
 import { failureText, type HistoryService } from "./HistoryService";
-import { groupVersions, shortDate } from "./words";
+import { createdAt, groupVersions, shortDate } from "./words";
 
 export const VIEW_HISTORY = `${PLUGIN_ID}-version-history`;
 
@@ -31,7 +31,7 @@ export class VersionHistoryView extends ItemView {
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly service: HistoryService,
-		private readonly openVersion: (path: string, versionId: string) => void,
+		private readonly openVersion: (path: string, versionId: VersionId) => void,
 	) {
 		super(leaf);
 	}
@@ -78,9 +78,10 @@ export class VersionHistoryView extends ItemView {
 			this.draw(null, () => undefined);
 			return;
 		}
-		const head = (el: HTMLElement) => {
+		const head = (el: HTMLElement, history?: NoteHistory | null) => {
+			const created = createdAt(file.stat.ctime, history?.versions);
 			el.createDiv({ cls: "knap-history-title", text: file.basename });
-			el.createDiv({ cls: "knap-history-muted", text: `Created ${shortDate(file.stat.ctime, Date.now())}` });
+			el.createDiv({ cls: "knap-history-muted", text: `Created ${shortDate(created, Date.now())}` });
 		};
 		const quiet = window.setTimeout(() => {
 			if (mine === this.loadCount) this.draw(head, (el) => this.muted(el, "Loading..."));
@@ -88,7 +89,7 @@ export class VersionHistoryView extends ItemView {
 		try {
 			const history = await this.service.history(path);
 			if (mine !== this.loadCount) return;
-			this.draw(head, (el) => this.drawVersions(el, path, history));
+			this.draw((el) => head(el, history), (el) => this.drawVersions(el, path, history));
 		} catch (error) {
 			if (mine !== this.loadCount) return;
 			const text = failureText(error, "Could not reach Pantalytics.");

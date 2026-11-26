@@ -332,17 +332,20 @@ an old one back. Three places, all Obsidian's own parts: a `Menu`, an
 **The corner.** The first line is the word and when the vault was last up to
 date: *Up to date, just now*, or *Offline, since 14:02*. With a note open,
 two lines to read, *Last changed* (the newest edit the server recorded, by
-the name in the address, else the device) and *Created* (off the file), then
+the name in the address, else the device; *AI for Daniel* when an AI wrote it) and *Created* (off the file), then
 *Version history*. Under Problem only, *Try again*, the same retry as the
 settings strip. No Settings item: Obsidian already has a place for settings.
-With no note open, the menu is the status line alone. The menu opens at once
+With no note open, the menu is the status line alone. Signed out or not
+linked, the corner still opens Settings, because that is where the way on is. The menu opens at once
 when the history was asked for in the last half minute, and otherwise waits
 at most 0.6 s for it, opening without *Last changed* rather than hanging.
 
 **The sidebar** follows the open note: its name, *Created*, and the versions
 grouped *Today*, *Yesterday* and by date, each a time, a person and how it
-was made, in the dashboard's words (*Typed in Obsidian*, *Written by AI*,
-*Put back by …*, *Not recorded*). A note without history says *No versions
+was made, in the dashboard's words (*Typed in Obsidian*, *Written by AI for …*,
+*Put back by …*, *Not recorded*). *Created* is the file's date, or the oldest
+version's when that is earlier: a note that arrived through sync carries the
+day it landed on this device. A note without history says *No versions
 yet.* and nothing else. A quick answer never shows *Loading...*: that line
 waits 0.4 s, so the list replaces the last one without a third state.
 

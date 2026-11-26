@@ -23,7 +23,7 @@ import {
 } from "obsidian";
 
 import { PLUGIN_ID } from "../../pluginId";
-import type { VersionText } from "../KnapServer";
+import type { VersionId, VersionText } from "../KnapServer";
 import { markChanges } from "./diffMarks";
 import { failureText, type HistoryService } from "./HistoryService";
 import { presenceLine } from "./presence";
@@ -33,7 +33,7 @@ export const VIEW_VERSION = `${PLUGIN_ID}-version`;
 
 interface VersionState {
 	path: string;
-	versionId: string;
+	versionId: VersionId;
 	/** How it was made, as the history said; the version endpoint does not say. */
 	how?: string;
 }
@@ -112,7 +112,7 @@ export class VersionView extends ItemView {
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		const next = state as Partial<VersionState> | null;
-		if (next?.path && next.versionId) {
+		if (next?.path && next.versionId !== undefined && next.versionId !== "") {
 			this.state = { path: next.path, versionId: next.versionId, how: next.how };
 			await this.fetchVersion();
 		}
@@ -142,13 +142,15 @@ export class VersionView extends ItemView {
 			return;
 		}
 		const file = this.app.vault.getAbstractFileByPath(state.path);
-		const current = file instanceof TFile ? await this.app.vault.read(file) : "";
+		// No file at the path (renamed or moved since) is no note to mark
+		// against: the version is shown as it is rather than as all new.
+		const current = file instanceof TFile ? await this.app.vault.read(file) : null;
 		if (state !== this.state) return;
 		this.version = version;
 		this.draw(version, current);
 	}
 
-	private draw(version: VersionText, current: string): void {
+	private draw(version: VersionText, current: string | null): void {
 		const el = this.contentEl;
 		el.empty();
 		const head = el.createDiv({ cls: "knap-version-head" });
@@ -165,7 +167,8 @@ export class VersionView extends ItemView {
 		this.paintRestore();
 
 		const body = el.createDiv({ cls: "knap-version-text" });
-		for (const mark of markChanges(version.text, current)) {
+		const marks = current === null ? [{ kind: "same", text: version.text }] : markChanges(version.text, current);
+		for (const mark of marks) {
 			if (mark.kind === "same") body.appendText(mark.text);
 			else if (mark.kind === "added") body.createEl("ins", { cls: "knap-mark-added", text: mark.text });
 			else body.createEl("del", { cls: "knap-mark-removed", text: mark.text });

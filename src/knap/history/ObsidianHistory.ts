@@ -13,20 +13,25 @@
 import { MarkdownView, Menu, Notice, Platform, Plugin, TFile } from "obsidian";
 
 import { PLUGIN_ID } from "../../pluginId";
-import { PROBLEM, UP_TO_DATE } from "../../syncStatus";
+import { PROBLEM, SIGNED_OUT, UP_TO_DATE } from "../../syncStatus";
 import type { KnapSync } from "../KnapSync";
+import type { VersionId } from "../KnapServer";
 import { cornerItems } from "./cornerMenu";
 import { FRESH_MS, HistoryService } from "./HistoryService";
 import { VersionHistoryView, VIEW_HISTORY } from "./VersionHistoryView";
 import { VersionView, VIEW_VERSION } from "./VersionView";
-import { lastChange, madeBy, shortDate, statusLine } from "./words";
+import { createdAt, lastChange, madeBy, shortDate, statusLine } from "./words";
 
 /** How long the corner's menu waits for a history it does not have, before it opens without it. */
 const MENU_WAIT_MS = 600;
 
 /** What the plugin gets back: the corner's click. */
 export interface NoteHistoryUi {
-	openCornerMenu(evt: MouseEvent): void;
+	/**
+	 * Open the corner's menu. False when there is nothing to say yet, signed
+	 * out or not linked, and the corner opens Settings, where the way on is.
+	 */
+	openCornerMenu(evt: MouseEvent): boolean;
 }
 
 export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
@@ -50,8 +55,10 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 	};
 
 	/** Open one version in the main area, reusing the version tab if one is open. */
-	const openVersion = (path: string, versionId: string) => {
-		const version = service.peek(path, Infinity)?.versions.find((v) => v.id === versionId);
+	const openVersion = (path: string, versionId: VersionId) => {
+		const version = service
+			.peek(path, Infinity)
+			?.versions.find((v) => String(v.id) === String(versionId));
 		const leaf = app.workspace.getLeavesOfType(VIEW_VERSION)[0] ?? app.workspace.getLeaf("tab");
 		void leaf
 			.setViewState({
@@ -90,9 +97,12 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 		},
 	});
 
-	if (Platform.isMobile) headerActions(host, sync, () => void openHistory(app.workspace.getActiveFile()?.path));
+	if (Platform.isMobile) {
+		headerActions(host, service, () => void openHistory(app.workspace.getActiveFile()?.path));
+	}
 
-	const openCornerMenu = (evt: MouseEvent) => {
+	const openCornerMenu = (evt: MouseEvent): boolean => {
+		if (!service.linked || sync.status().word === SIGNED_OUT) return false;
 		const file = app.workspace.getActiveFile();
 		const note = file && file.extension === "md" && service.hasNote(file.path) ? file : null;
 		const show = () => {
@@ -107,7 +117,7 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 				note: file && file.extension === "md"
 					? {
 							lastChanged: last ? `${last.who}, ${last.when}` : null,
-							created: shortDate(file.stat.ctime, now),
+							created: shortDate(createdAt(file.stat.ctime, history?.versions), now),
 							synced: note !== null,
 						}
 					: null,
@@ -133,10 +143,11 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 		// the note when the server is quick, and without it when it is not.
 		if (!note || service.peek(note.path, FRESH_MS) !== undefined || !service.canReach()) {
 			show();
-			return;
+			return true;
 		}
 		const wait = new Promise((resolve) => window.setTimeout(resolve, MENU_WAIT_MS));
 		void Promise.race([service.history(note.path).catch(() => null), wait]).then(show);
+		return true;
 	};
 
 	return { openCornerMenu };
@@ -146,7 +157,8 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
  * The corner's icon on a phone, in each note's header: the same mark, in the
  * same colour as the vault's state, and a tap opens the versions.
  */
-function headerActions(host: Plugin, sync: KnapSync, open: () => void): void {
+function headerActions(host: Plugin, service: HistoryService, open: () => void): void {
+	const sync = service.sync;
 	const done = new WeakSet<MarkdownView>();
 	let icons: HTMLElement[] = [];
 	const paint = () => {
@@ -161,7 +173,8 @@ function headerActions(host: Plugin, sync: KnapSync, open: () => void): void {
 	const add = () => {
 		for (const leaf of host.app.workspace.getLeavesOfType("markdown")) {
 			const view = leaf.view;
-			if (!(view instanceof MarkdownView) || done.has(view)) continue;
+			// Only in a linked vault: a vault that syncs nowhere has no history.
+			if (!(view instanceof MarkdownView) || done.has(view) || !service.linked) continue;
 			done.add(view);
 			const icon = view.addAction(PLUGIN_ID, "Version history", open);
 			icon.addClass("knap-action");

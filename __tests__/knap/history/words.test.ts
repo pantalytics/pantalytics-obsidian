@@ -7,6 +7,7 @@
 import type { NoteActivity, NoteVersion } from "../../../src/knap/KnapServer";
 import {
 	ago,
+	createdAt,
 	dayLabel,
 	groupVersions,
 	lastChange,
@@ -36,7 +37,8 @@ function version(id: string, ms: number, kind: NoteVersion["actor_kind"], email:
 describe("how a version was made", () => {
 	it("says it in the dashboard's words", () => {
 		expect(madeBy({ actor_kind: "typed", actor_email: "a@b" })).toBe("Typed in Obsidian");
-		expect(madeBy({ actor_kind: "tool", actor_email: "a@b" })).toBe("Written by AI");
+		expect(madeBy({ actor_kind: "tool", actor_email: "a@b" })).toBe("Written by AI for a@b");
+		expect(madeBy({ actor_kind: "tool", actor_email: null })).toBe("Written by AI");
 		expect(madeBy({ actor_kind: "panel", actor_email: "daniel@acme.nl" })).toBe(
 			"Put back by daniel@acme.nl",
 		);
@@ -95,6 +97,11 @@ describe("the versions, by day", () => {
 		expect(groups[2].rows[0].how).toBe("Not recorded");
 	});
 
+	it("names the person only on a typed version, since the how already holds the address", () => {
+		const [group] = groupVersions([version("v5", at(26, 10, 0), "tool", "daniel@acme.nl")], NOW);
+		expect(group.rows[0]).toMatchObject({ who: "", how: "Written by AI for daniel@acme.nl" });
+	});
+
 	it("is empty for no versions", () => {
 		expect(groupVersions([], NOW)).toEqual([]);
 	});
@@ -118,7 +125,18 @@ describe("who changed a note last", () => {
 			when: "3 min ago",
 		});
 		expect(lastChange([row({ actor_email: null })], NOW)?.who).toBe("MacBook");
+		expect(lastChange([row({ kind: "tool" })], NOW)?.who).toBe("AI for Daniel");
+		expect(lastChange([row({ kind: "tool", actor_email: null })], NOW)?.who).toBe("AI");
 		expect(lastChange([], NOW)).toBeNull();
+	});
+});
+
+describe("when a note was created", () => {
+	it("is the file's date, or the oldest version when that is earlier", () => {
+		const versions = [version("v2", at(20, 9, 0), "typed", null), version("v1", at(3, 9, 0), "typed", null)];
+		expect(createdAt(at(26, 8, 0), versions)).toBe(at(3, 9, 0));
+		expect(createdAt(at(1, 8, 0), versions)).toBe(at(1, 8, 0));
+		expect(createdAt(at(1, 8, 0), undefined)).toBe(at(1, 8, 0));
 	});
 });
 

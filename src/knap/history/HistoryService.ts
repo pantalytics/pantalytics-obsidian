@@ -10,7 +10,7 @@
  * a stale device in Obsidian Sync can write straight back over.
  */
 
-import { KnapServerError, type NoteHistory, type VersionText } from "../KnapServer";
+import { KnapServerError, type NoteHistory, type VersionId, type VersionText } from "../KnapServer";
 import type { KnapSync } from "../KnapSync";
 import { OFFLINE, SIGNED_OUT } from "../../syncStatus";
 
@@ -62,12 +62,12 @@ export class HistoryService {
 		return history;
 	}
 
-	async version(versionId: string): Promise<VersionText> {
+	async version(versionId: VersionId): Promise<VersionText> {
 		const linked = this.need();
 		return this.sync.server.version(linked.token, linked.cloudVaultId, versionId);
 	}
 
-	async restore(versionId: string, path: string): Promise<void> {
+	async restore(versionId: VersionId, path: string): Promise<void> {
 		const linked = this.need();
 		await this.sync.server.restore(linked.token, linked.cloudVaultId, versionId);
 		this.cache.delete(path);

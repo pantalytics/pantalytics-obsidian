@@ -1444,9 +1444,9 @@ export default class Live extends Plugin {
 	/** What the corner is saying, which lags what the vault is doing. */
 	private corner: Burst = STILL;
 	/** What a click on the corner opens: the note history's menu (`history/ObsidianHistory.ts`). */
-	private cornerMenu: ((evt: MouseEvent) => void) | null = null;
+	private cornerMenu: ((evt: MouseEvent) => boolean) | null = null;
 
-	setCornerMenu(open: (evt: MouseEvent) => void): void {
+	setCornerMenu(open: (evt: MouseEvent) => boolean): void {
 		this.cornerMenu = open;
 	}
 
@@ -1484,10 +1484,9 @@ export default class Live extends Plugin {
 
 		statusBarItem.addEventListener("click", (evt) => {
 			paint();
-			// The menu, when this build has a vault to say things about;
-			// Settings only in the build that has none.
-			if (this.cornerMenu) this.cornerMenu(evt);
-			else void this.openSettings("/relay-onprem");
+			// The menu, when there is a linked vault to say things about;
+			// Settings while signed out or not linked, where the way on is.
+			if (!this.cornerMenu?.(evt)) void this.openSettings("/relay-onprem");
 		});
 	}
 

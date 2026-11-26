@@ -46,7 +46,7 @@ export interface KnapHost extends Plugin {
 	getKnapLink(): KnapLink | null;
 	saveKnapLink(value: KnapLink | null): Promise<void>;
 	/** What a click on the corner of the window opens, once there is a vault to say things about. */
-	setCornerMenu?(open: (evt: MouseEvent) => void): void;
+	setCornerMenu?(open: (evt: MouseEvent) => boolean): void;
 }
 
 /**
