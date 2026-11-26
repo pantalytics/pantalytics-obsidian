@@ -1066,3 +1066,11 @@
 .knap-link-removed {
 	color: var(--text-normal);
 }
+
+/*
+ * On a touch screen nothing hovers, so a caret's name would never show
+ * (knapEditor.ts hides it until a mouseover). Keep it visible there.
+ */
+body.is-mobile .cm-editor .knap-caret-name {
+	opacity: 1;
+}

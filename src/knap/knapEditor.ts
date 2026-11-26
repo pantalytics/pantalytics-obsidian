@@ -27,7 +27,7 @@ import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 
 import { LiveNote, fromDocument, type PendingTyping } from "./LiveNote";
-import { readCursors } from "./NoteCursors";
+import { ACTIVE_MS, PeerActivity, readCursors } from "./NoteCursors";
 
 /** One note, live: its text, the awareness beside it, and how to let go. */
 export interface LiveNoteHandle {
@@ -62,22 +62,31 @@ class CaretWidget extends WidgetType {
 		private readonly color: string,
 		private readonly name: string,
 		private readonly ai: boolean,
+		private readonly active: boolean = false,
+		private readonly typing: boolean = false,
 	) {
 		super();
 	}
 
 	eq(other: CaretWidget): boolean {
-		return other.color === this.color && other.name === this.name && other.ai === this.ai;
+		return (
+			other.color === this.color &&
+			other.name === this.name &&
+			other.ai === this.ai &&
+			other.active === this.active &&
+			other.typing === this.typing
+		);
 	}
 
 	toDOM(): HTMLElement {
 		const caret = createSpan({ cls: "knap-caret" });
 		caret.style.borderColor = this.color;
 		caret.style.backgroundColor = this.color;
-		const label = createDiv({
-			cls: this.ai ? ["knap-caret-name", "knap-caret-name-ai"] : "knap-caret-name",
-			text: this.name,
-		});
+		const cls = ["knap-caret-name"];
+		if (this.ai) cls.push("knap-caret-name-ai");
+		if (this.active) cls.push("knap-caret-name-active");
+		if (this.typing) cls.push("knap-caret-name-typing");
+		const label = createDiv({ cls, text: this.name });
 		label.style.backgroundColor = this.color;
 		caret.appendChild(label);
 		return caret;
@@ -110,12 +119,19 @@ export const knapCursorTheme = EditorView.baseTheme({
 		whiteSpace: "nowrap",
 		userSelect: "none",
 		zIndex: "101",
-		// Out of the way while somebody is reading, back on a mouseover.
+		// Out of the way while somebody is reading; shown while they move or
+		// type, on a mouseover, and always on a touch screen (styles.css),
+		// where nothing hovers.
 		opacity: "0",
 		transition: "opacity .2s ease-in-out",
 	},
-	".knap-caret:hover > .knap-caret-name, .knap-caret-name-ai": {
+	".knap-caret:hover > .knap-caret-name, .knap-caret-name-ai, .knap-caret-name-active": {
 		opacity: "1",
+	},
+	// Said beside the name rather than in it, so the label still reads as who.
+	".knap-caret-name-typing::after": {
+		content: '" typing…"',
+		opacity: ".85",
 	},
 	".knap-selection": {
 		borderRadius: "2px",
@@ -127,9 +143,10 @@ export function cursorDecorations(
 	awareness: Awareness,
 	text: Y.Text,
 	length: number,
+	activity?: PeerActivity,
 ): DecorationSet {
 	const decorations = [];
-	for (const cursor of readCursors(awareness, text)) {
+	for (const cursor of readCursors(awareness, text, activity)) {
 		if (cursor.to > length) continue; // this editor has not caught up yet
 		if (cursor.from !== cursor.to) {
 			decorations.push(
@@ -141,7 +158,7 @@ export function cursorDecorations(
 		}
 		decorations.push(
 			Decoration.widget({
-				widget: new CaretWidget(cursor.color, cursor.name, cursor.ai),
+				widget: new CaretWidget(cursor.color, cursor.name, cursor.ai, cursor.active, cursor.typing),
 				// The caret belongs outside the selection it trails.
 				side: cursor.head > cursor.from ? 1 : -1,
 			}).range(cursor.head),
@@ -175,6 +192,9 @@ class KnapEditorPlugin implements PluginValue {
 	private onAwareness: (changes: unknown, origin: unknown) => void;
 	/** A redraw is already on its way; the next one would draw the same. */
 	private redrawing = false;
+	/** Who moved or typed lately, so their name shows without a hover. */
+	private readonly activity = new PeerActivity();
+	private fadeTimer = 0;
 	private destroyed = false;
 	decorations: DecorationSet = Decoration.none;
 
@@ -189,8 +209,21 @@ class KnapEditorPlugin implements PluginValue {
 		// throws; CodeMirror then switches this plugin off for the editor and
 		// nobody is live any more (issue #183). Our own caret is not drawn
 		// here anyway, so only somebody else's change asks for a redraw.
-		this.onAwareness = (_changes, origin) => {
-			if (origin !== "local") this.redraw();
+		this.onAwareness = (changes, origin) => {
+			if (origin === "local" || !this.note) return;
+			const { added = [], updated = [], removed = [] } = (changes ?? {}) as {
+				added?: number[];
+				updated?: number[];
+				removed?: number[];
+			};
+			this.activity.observe(this.note.awareness, [...added, ...updated, ...removed]);
+			this.redraw();
+			// Once more when the "just moved" or "typing" label is due to fade.
+			if (this.fadeTimer) window.clearTimeout(this.fadeTimer);
+			this.fadeTimer = window.setTimeout(() => {
+				this.fadeTimer = 0;
+				this.redraw();
+			}, ACTIVE_MS + 50);
 		};
 		this.bind();
 	}
@@ -267,6 +300,8 @@ class KnapEditorPlugin implements PluginValue {
 
 	private unbind(): void {
 		this.note?.awareness.off("change", this.onAwareness);
+		if (this.fadeTimer) window.clearTimeout(this.fadeTimer);
+		this.fadeTimer = 0;
 		this.live?.destroy();
 		this.note?.release();
 		this.live = null;
@@ -308,6 +343,7 @@ class KnapEditorPlugin implements PluginValue {
 			this.note.awareness,
 			this.note.text,
 			this.view.state.doc.length,
+			this.activity,
 		);
 	}
 

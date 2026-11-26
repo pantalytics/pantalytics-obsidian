@@ -131,6 +131,12 @@ export class KnapVaultClient {
 		 * positionally by callers that do not care about notices.
 		 */
 		private readonly onNotice?: (notice: ServerNotice) => void,
+		/**
+		 * What this device is ("mac", "iphone", ...), so a note's history can
+		 * say whether an edit came from a desktop or a phone (ADR-0115 in the
+		 * admin repository). One word, nothing else.
+		 */
+		private readonly platform?: string,
 	) {}
 
 	/**
@@ -396,6 +402,7 @@ export class KnapVaultClient {
 
 		const doc = new Y.Doc();
 		const params: Record<string, string> = { token: this.token, device: this.deviceName };
+		if (this.platform) params.platform = this.platform;
 		const counts = this.localCounts?.();
 		if (counts) {
 			params.notes = String(counts.notes);

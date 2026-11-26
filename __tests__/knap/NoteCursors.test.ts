@@ -13,8 +13,11 @@ import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 
 import {
+	ACTIVE_MS,
+	PeerActivity,
 	colorFor,
 	publishCursor,
+	publishTyping,
 	publishUser,
 	readCursors,
 	withdrawCursor,
@@ -220,5 +223,57 @@ describe("the AI's caret", () => {
 		relayAwareness(a.awareness, b.awareness);
 
 		expect(readCursors(b.awareness, b.text)[0].ai).toBe(false);
+	});
+});
+
+
+describe("who is moving or typing right now", () => {
+	function watched() {
+		const a = device("rutger");
+		const b = device("daniel");
+		a.text.insert(0, "Hello world\n");
+		relayDoc(a.doc, b.doc);
+		const activity = new PeerActivity();
+		const relay = (now: number) => {
+			relayAwareness(a.awareness, b.awareness);
+			activity.observe(b.awareness, [a.awareness.clientID], now);
+		};
+		return { a, b, activity, relay };
+	}
+
+	it("shows a name while its caret moves, and lets it fade", () => {
+		const { a, b, activity, relay } = watched();
+		publishCursor(a.awareness, a.text, { anchor: 1, head: 1 });
+		relay(0); // first sight: not a move
+		expect(readCursors(b.awareness, b.text, activity, 0)[0].active).toBe(false);
+		publishCursor(a.awareness, a.text, { anchor: 4, head: 4 });
+		relay(1000);
+		expect(readCursors(b.awareness, b.text, activity, 1500)[0]).toMatchObject({ active: true, typing: false });
+		expect(readCursors(b.awareness, b.text, activity, 1000 + ACTIVE_MS)[0].active).toBe(false);
+	});
+
+	it("says typing, on the reader's own clock, and only once a second", () => {
+		const { a, b, activity, relay } = watched();
+		publishCursor(a.awareness, a.text, { anchor: 1, head: 1 });
+		publishTyping(a.awareness, 10_000);
+		relay(0);
+		publishTyping(a.awareness, 10_500); // inside the second: not sent
+		expect(a.awareness.getLocalState()?.typing).toBe(1);
+		publishTyping(a.awareness, 11_100);
+		relay(5000);
+		expect(readCursors(b.awareness, b.text, activity, 6000)[0]).toMatchObject({ typing: true, active: true });
+		expect(readCursors(b.awareness, b.text, activity, 5000 + ACTIVE_MS)[0].typing).toBe(false);
+	});
+
+	it("forgets a peer whose state is gone", () => {
+		const { a, b, activity, relay } = watched();
+		publishCursor(a.awareness, a.text, { anchor: 1, head: 1 });
+		relay(0);
+		publishCursor(a.awareness, a.text, { anchor: 2, head: 2 });
+		relay(10);
+		expect(activity.active(a.awareness.clientID, 20)).toBe(true);
+		b.awareness.states.delete(a.awareness.clientID);
+		activity.observe(b.awareness, [a.awareness.clientID], 30);
+		expect(activity.active(a.awareness.clientID, 30)).toBe(false);
 	});
 });

@@ -25,7 +25,7 @@ import { Annotation, ChangeSet, EditorState, type ChangeSpec } from "@codemirror
 import * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 
-import { publishCursor, publishUser, withdrawCursor } from "./NoteCursors";
+import { publishCursor, publishTyping, publishUser, withdrawCursor } from "./NoteCursors";
 
 /**
  * Marks the transactions this module dispatches, so the change it just wrote
@@ -199,6 +199,7 @@ export class LiveNote {
 				adjust += insert.length - (toA - fromA);
 			});
 		}, this);
+		publishTyping(this.awareness);
 	}
 
 	/** Where this editor's caret is, for everybody else in the note. */

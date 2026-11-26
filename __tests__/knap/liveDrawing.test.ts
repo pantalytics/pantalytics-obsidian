@@ -11,7 +11,7 @@ import * as Y from "yjs";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 
 import { type Element, beats } from "../../src/knap/drawing";
-import { LiveDrawing, type ExcalidrawLike } from "../../src/knap/LiveDrawing";
+import { LiveDrawing, POINTER_EVERY_MS, type ExcalidrawLike } from "../../src/knap/LiveDrawing";
 import { DrawingLatency, SEEN_FIELD, drawingLatency } from "../../src/knap/drawingLatency";
 
 class FakeExcalidraw implements ExcalidrawLike {
@@ -19,10 +19,12 @@ class FakeExcalidraw implements ExcalidrawLike {
 	collaborators = new Map<string, unknown>();
 	updates = 0;
 	private changes: ((elements: readonly Element[]) => void)[] = [];
-	private pointers: ((payload: {
-		pointer: { x: number; y: number; tool: "pointer" | "laser" };
-		button: "up" | "down";
-	}) => void)[] = [];
+	private pointers: ((
+		payload: {
+			pointer: { x: number; y: number; tool: "pointer" | "laser" };
+			button: "up" | "down";
+		} | null,
+	) => void)[] = [];
 
 	getSceneElementsIncludingDeleted(): readonly Element[] {
 		return this.elements;
@@ -55,8 +57,13 @@ class FakeExcalidraw implements ExcalidrawLike {
 		for (const change of this.changes) change(this.elements);
 	}
 
-	point(x: number, y: number): void {
-		for (const pointer of this.pointers) pointer({ pointer: { x, y, tool: "pointer" }, button: "up" });
+	point(x: number, y: number, button: "up" | "down" = "up"): void {
+		for (const pointer of this.pointers) pointer({ pointer: { x, y, tool: "pointer" }, button });
+	}
+
+	/** A finger or a pen lifted, or the pointer left the drawing. */
+	lift(): void {
+		for (const pointer of this.pointers) pointer(null);
 	}
 }
 
@@ -193,6 +200,32 @@ describe("a drawing open on two screens", () => {
 		expect(collaborator.username).toBe("rutger");
 		expect(collaborator.pointer).toMatchObject({ x: 120, y: 80 });
 		expect(views[0].collaborators.size).toBe(0);
+	});
+
+	it("takes the pointer away the moment a finger lifts", () => {
+		const { views } = twoViews();
+		views[0].point(120, 80);
+		expect(views[1].collaborators.size).toBe(1);
+		views[0].lift();
+		expect(views[1].collaborators.size).toBe(0);
+	});
+
+	it("sends a burst of moves as one frame, and the last position wins", () => {
+		jest.useFakeTimers();
+		try {
+			const { views } = twoViews();
+			views[0].point(0, 0);
+			for (let x = 1; x <= 20; x++) views[0].point(x, 0);
+			const seen = () =>
+				([...views[1].collaborators.values()][0] as { pointer: { x: number } }).pointer.x;
+			expect(seen()).toBe(0); // the burst waits for its slot
+			jest.advanceTimersByTime(POINTER_EVERY_MS);
+			expect(seen()).toBe(20);
+			views[0].point(21, 0, "down"); // a press does not wait
+			expect(seen()).toBe(21);
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it("takes the pointer away when the drawing closes", () => {

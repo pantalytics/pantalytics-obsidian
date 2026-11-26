@@ -36,6 +36,8 @@ export const POINTER_FIELD = "pointer";
 
 /** How often local strokes go out, at most. A drag is a change per frame. */
 export const SEND_EVERY_MS = 100;
+/** At most one pointer frame per this many milliseconds; the last one always goes. */
+export const POINTER_EVERY_MS = 40;
 
 export interface Pointer {
 	x: number;
@@ -53,8 +55,11 @@ export interface ExcalidrawLike {
 		captureUpdate?: "IMMEDIATELY" | "EVENTUALLY" | "NEVER";
 	}): void;
 	onChange(callback: (elements: readonly Element[]) => void): () => void;
+	/** `null` when the pointer left the drawing: a mouse out, a finger or pen lifted. */
 	onPointerUpdate(
-		callback: (payload: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "up" | "down" }) => void,
+		callback: (
+			payload: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "up" | "down" } | null,
+		) => void,
 	): () => void;
 }
 
@@ -73,6 +78,10 @@ export class LiveDrawing {
 	private firstChangeAt = 0;
 	private announced = false;
 	private timer: number | null = null;
+	/** The pointer as it last went out, and as it is now. */
+	private pointerSent: Pointer | null = null;
+	private pointerNext: Pointer | null = null;
+	private pointerTimer = 0;
 	private destroyed = false;
 
 	constructor(
@@ -107,13 +116,23 @@ export class LiveDrawing {
 
 		this.stops.push(this.api.onChange(() => this.schedule()));
 		this.stops.push(
-			this.api.onPointerUpdate(({ pointer, button }) => {
-				this.awareness.setLocalStateField(POINTER_FIELD, {
-					x: pointer.x,
-					y: pointer.y,
-					tool: pointer.tool,
-					button,
-				} satisfies Pointer);
+			this.api.onPointerUpdate((update) => {
+				this.pointerNext = update
+					? ({
+							x: update.pointer.x,
+							y: update.pointer.y,
+							tool: update.pointer.tool,
+							button: update.button,
+						} satisfies Pointer)
+					: null;
+				// Gone, or the button changed: say it now. A move waits for the
+				// next slot, so a pen at 240 Hz is not 240 awareness frames a
+				// second to everybody in the drawing.
+				const last = this.pointerSent;
+				if (!update || !last || last.button !== update.button) this.sendPointer();
+				else if (!this.pointerTimer) {
+					this.pointerTimer = window.setTimeout(() => this.sendPointer(), POINTER_EVERY_MS);
+				}
 			}),
 		);
 		const onAwareness = () => {
@@ -162,8 +181,17 @@ export class LiveDrawing {
 		this.destroyed = true;
 		if (this.timer) window.clearTimeout(this.timer);
 		for (const stop of this.stops) stop();
+		if (this.pointerTimer) window.clearTimeout(this.pointerTimer);
 		this.awareness.setLocalStateField(POINTER_FIELD, null);
 		if (this.announced) this.awareness.setLocalStateField(MEASURE_FIELD, null);
+	}
+
+	private sendPointer(): void {
+		if (this.pointerTimer) window.clearTimeout(this.pointerTimer);
+		this.pointerTimer = 0;
+		if (this.destroyed) return;
+		this.pointerSent = this.pointerNext;
+		this.awareness.setLocalStateField(POINTER_FIELD, this.pointerNext);
 	}
 
 	private schedule(): void {

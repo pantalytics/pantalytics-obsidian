@@ -23,7 +23,8 @@ export function setSpeedCredential(token: string): void {
 	credential = token;
 }
 
-function platform(): string {
+/** What this device is, in the words the server takes. */
+export function platform(): string {
 	if (Platform.isIosApp) return Platform.isTablet ? "ipad" : "iphone";
 	if (Platform.isAndroidApp) return "android";
 	if (Platform.isMacOS) return "mac";

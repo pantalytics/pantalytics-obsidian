@@ -237,4 +237,30 @@ describe("the note socket pool", () => {
 		expect(urls.pop()).not.toContain("notes=");
 		silent.destroy();
 	});
+
+	it("says what the device is, so a note's history can tell a phone from a desktop", async () => {
+		const network = new FakeNetwork();
+		const urls: string[] = [];
+		const Base = network.socket as { new (url: string | URL): object };
+		const recording = class extends Base {
+			constructor(url: string | URL) {
+				super(url);
+				urls.push(String(url));
+			}
+		};
+		const server = new KnapServer("https://knap.test", async () => new Response("{}"));
+		const phone = new KnapVaultClient(
+			server, "v1", "knap_token", "Laptop", recording, undefined, undefined, undefined, "iphone",
+		);
+		phone.tree();
+		await phone.treeSynced();
+		expect(urls.pop()).toContain("platform=iphone");
+		phone.destroy();
+
+		const older = new KnapVaultClient(server, "v2", "knap_token", "Laptop", recording);
+		older.tree();
+		await older.treeSynced();
+		expect(urls.pop()).not.toContain("platform=");
+		older.destroy();
+	});
 });

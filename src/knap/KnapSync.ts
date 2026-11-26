@@ -157,6 +157,8 @@ export function checking(status: Pick<KnapStatus, "checked">): boolean {
 export interface KnapSyncOptions {
 	serverUrl: string;
 	deviceName: string;
+	/** "mac", "windows", "linux", "ipad", "iphone" or "android"; told to the server. */
+	platform?: string;
 	fetchFn: Fetch;
 	files: FileStore;
 	load: () => KnapLink | null;
@@ -588,6 +590,7 @@ export class KnapSync {
 			() => this.loseVault(stored.cloudVaultName),
 			() => this.counts,
 			this.options.onNotice,
+			this.options.platform,
 		);
 		// The tree, before anything is counted against it. Both bindings make
 		// this same wait for the same reason, and making it here as well costs
