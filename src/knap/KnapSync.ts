@@ -45,6 +45,7 @@ import { conflictLabelFor, personLabel } from "./person";
 import { generateHash } from "../hashing";
 import type { TreeDoc } from "./TreeDoc";
 import { isHidden, normalize } from "./TreeDoc";
+import { editorsIn } from "./history/presence";
 import type { FileStore, Pass, SeenTree } from "./VaultBinding";
 import { VaultBinding } from "./VaultBinding";
 import type { CloudVault, Fetch } from "./KnapServer";
@@ -138,6 +139,8 @@ export interface KnapStatus {
 	 * *412 of 2,505* rather than Syncing over nothing.
 	 */
 	checked: { notes: Pass; attachments: Pass };
+	/** The last moment this vault read Up to date, epoch ms; 0 when not since this start. */
+	upToDateAt: number;
 }
 
 /** Notes and attachments together: what the corner, with room for two numbers, reads. */
@@ -239,6 +242,12 @@ export class KnapSync {
 	private filling = false;
 	/** Set while the record of that is being written, so it is written once. */
 	private settling = false;
+	/**
+	 * The last moment a status read found this vault up to date, in epoch
+	 * milliseconds, or 0 when it has not been since this start. What the
+	 * corner's menu says *since* after a word that is not Up to date.
+	 */
+	private upToDateAt = 0;
 
 	constructor(private readonly options: KnapSyncOptions) {
 		this.server = new KnapServer(options.serverUrl, options.fetchFn);
@@ -313,6 +322,8 @@ export class KnapSync {
 			// person must not close Obsidian in the middle of (ADR-0090).
 			initial: this.firstSync,
 		});
+		// When it last was, for the corner's *Offline, since 14:02*.
+		if (word === UP_TO_DATE) this.upToDateAt = Date.now();
 		// A vault that has fallen quiet has finished its first pass, and this
 		// is where that becomes true: the word above is the only reader of
 		// the flag, and this is the moment it stopped mattering. Written to
@@ -335,7 +346,26 @@ export class KnapSync {
 			down: backlog.down,
 			files,
 			checked: this.checked(),
+			upToDateAt: this.upToDateAt,
 		};
+	}
+
+	/** The document id behind a vault path, or null when the cloud vault has no such note. */
+	docIdFor(path: string): string | null {
+		return this.client?.tree().docIdFor(normalize(path)) ?? null;
+	}
+
+	/**
+	 * Who else has this note open in an editor right now, by name.
+	 *
+	 * Read off the awareness of a note this device already holds open, and
+	 * empty for one it does not: asking must not open a socket.
+	 */
+	othersInNote(path: string): string[] {
+		const docId = this.docIdFor(path);
+		const awareness = docId ? this.client?.awarenessOf(docId) : null;
+		if (!awareness) return [];
+		return editorsIn(awareness.getStates(), awareness.clientID);
 	}
 
 	/**

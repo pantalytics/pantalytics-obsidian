@@ -1,0 +1,127 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-26T10:00:00Z"
+  },
+  "title": "Knap in Obsidian",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 800,
+      "title": "1 Corner: click the status",
+      "is_interactive": true
+    },
+    "Panel.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 800,
+      "title": "2 Note panel (right sidebar)",
+      "is_interactive": true
+    },
+    "Version.dc.html": {
+      "x": 2720,
+      "y": 0,
+      "w": 1280,
+      "h": 800,
+      "title": "3 One version, Restore"
+    },
+    "Phone.dc.html": {
+      "x": 0,
+      "y": 1150,
+      "w": 390,
+      "h": 844,
+      "title": "4a Phone: note"
+    },
+    "PhonePanel.dc.html": {
+      "x": 470,
+      "y": 1150,
+      "w": 390,
+      "h": 844,
+      "title": "4b Phone: right drawer"
+    },
+    "PhoneVersion.dc.html": {
+      "x": 940,
+      "y": 1150,
+      "w": 390,
+      "h": 844,
+      "title": "4c Phone: one version"
+    },
+    "Settings.dc.html": {
+      "x": 1410,
+      "y": 1150,
+      "w": 1000,
+      "h": 760,
+      "title": "5 Settings (as is, plus Last synced)"
+    },
+    "Restore.dc.html": {
+      "x": 3090,
+      "y": 1250,
+      "w": 1280,
+      "h": 800,
+      "title": "3b Restore: confirm"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Panel.dc.html",
+    "Version.dc.html",
+    "Restore.dc.html",
+    "Phone.dc.html",
+    "PhonePanel.dc.html",
+    "PhoneVersion.dc.html",
+    "Settings.dc.html"
+  ],
+  "notes": {
+    "t1": {
+      "x": 0,
+      "y": -300,
+      "text": "Desktop: in a note",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "t2": {
+      "x": 0,
+      "y": 850,
+      "text": "Phone, and the settings",
+      "kind": "title1",
+      "maxW": 2410
+    },
+    "s1": {
+      "x": 4080,
+      "y": 0,
+      "w": 420,
+      "fill": "blue",
+      "text": "How it works (brand.pantalytics.com, less is more)\n\n1. The corner stays the icon. Click: status and when, last changed, created, one row Version history. No way to Settings from here: that is Obsidian's own Settings. Only under Problem a Try again.\n2. Version history opens a panel in Obsidian's right sidebar: created, then the versions. Each fact once.\n3. A version opens with its changes marked. One primary button: Restore. Restore keeps the current text as a version.\n\nObsidian's frame and colours, no Murecho, no shadows. Colour only for status (green, amber, red); the accent only on Restore.\n\nPhone: the icon sits in the note's header, tap opens the same panel as the right drawer."
+    },
+    "s3": {
+      "x": 2490,
+      "y": 1150,
+      "w": 520,
+      "fill": "gray",
+      "text": "How others do it (help pages, 26 Nov)\n\nObsidian Sync: status icon in the status bar, click = menu (Pause, Version history, Sync log, Deleted files, Settings). Version history = pop-up, list left, preview right, Restore. Phone: icon only in the swiped-in right sidebar; users keep asking for it always visible.\n\nGoogle Docs: 'Last edit' top right, click = version history as a right side panel, who changed what. Not in the phone app at all.\n\nNotion: \u2022\u2022\u2022 > Version history, changes highlighted, Restore. Phone: list, view, Restore, no diff. No live sync status, only 'edited by'.\n\nWhat we take: the click on the corner (Obsidian), the right side panel with who and when (Google Docs), the icon always visible on phone (what Obsidian users ask for), no diff on phone (Notion)."
+    },
+    "s2": {
+      "x": 4080,
+      "y": 620,
+      "w": 420,
+      "fill": "orange",
+      "text": "Decisions open\n\nA. Restore in Obsidian too: decided yes (26 Nov).\nB. The history API is not reachable from outside today (ADR-0079/0082: panel only). This needs it routed for the plugin's token.\nC. Created = Obsidian's own file date on this device; who created it only when the server still has that row (activity is kept 30 days)."
+    },
+    "s4": {
+      "x": 4450,
+      "y": 1250,
+      "w": 480,
+      "fill": "green",
+      "text": "How Restore works, and why it is safe\n\n1. Restore runs on the server, never by writing the file on this device. The server puts the old text into the live note as a change, the same way an AI write lands (ADR-0082). Every device gets it in seconds, the cloud included.\n2. Before that, the current text is saved as a version. A restore can always be undone with another Restore. Google Docs, Notion and Tiptap do the same.\n3. The new version says who restored it: 'Restored from today 13:10, Rutger'.\n4. Offline: Restore is greyed out, tooltip 'Restore needs a connection'. A restore that only lived on one device is what goes wrong in Obsidian Sync: an old device overwrites newer text later.\n5. Somebody else in the note: the confirm says so (Daniel has this note open). Not blocked; their typing merges in.\n\nRisk that stays: a device that was offline and edited this note brings its edits back in when it reconnects. Nothing is lost; it shows as its own version with the device's name. No other app solves this either."
+    }
+  },
+  "designSystems": []
+}

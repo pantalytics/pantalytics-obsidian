@@ -37,6 +37,7 @@ import { KnapSettingsTab, dashboardUrl, signOutNotice } from "./KnapSettingsTab"
 import { LinkProgressModal } from "./LinkProgressModal";
 import { SIGNIN_ACTION } from "./SignInFlow";
 import { obsidianFetch } from "./obsidianFetch";
+import { followHistory } from "./history/ObsidianHistory";
 
 declare const KNAP_SERVER_URL: string;
 
@@ -44,6 +45,8 @@ declare const KNAP_SERVER_URL: string;
 export interface KnapHost extends Plugin {
 	getKnapLink(): KnapLink | null;
 	saveKnapLink(value: KnapLink | null): Promise<void>;
+	/** What a click on the corner of the window opens, once there is a vault to say things about. */
+	setCornerMenu?(open: (evt: MouseEvent) => boolean): void;
 }
 
 /**
@@ -372,6 +375,10 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 	// The same for Excalidraw drawings: strokes and pointers while a drawing
 	// is open, per element (ADR-0109).
 	followDrawings(host, sync);
+
+	// A note's versions: the corner's menu, the sidebar, the version tab.
+	const history = followHistory(host, sync);
+	host.setCornerMenu?.((evt) => history.openCornerMenu(evt));
 
 	// How long a stroke takes to reach another screen (odoo-mcp-pro-admin#695).
 	host.addCommand({

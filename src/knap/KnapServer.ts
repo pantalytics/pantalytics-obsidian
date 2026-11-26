@@ -10,6 +10,7 @@
  * - how large an attachment this deployment takes
  * - the address of a document's sync socket
  * - attachments, up and down, as plain bytes
+ * - a note's history: its versions, one version's text, and putting one back
  *
  * There is no per-document token, no rate-limited token route and no
  * control plane behind this: the server that answers is the server that
@@ -47,6 +48,49 @@ export interface HttpAnswer {
 	status: number;
 	json(): Promise<unknown>;
 	arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+/** A version's id: an integer on the wire, carried as given and compared as text. */
+export type VersionId = number | string;
+
+/** One saved version of a note, newest first in a history. */
+export interface NoteVersion {
+	id: VersionId;
+	path: string;
+	/** When it was saved, in epoch seconds. */
+	ts: number;
+	sha256: string;
+	/** How it was made: typed in Obsidian, written by an AI, or put back. Null when not recorded. */
+	actor_kind: "typed" | "tool" | "panel" | null;
+	actor_subject: string | null;
+	actor_email: string | null;
+}
+
+/** One edit session on a note: who, from where, when it last wrote. */
+export interface NoteActivity {
+	started: number;
+	ts: number;
+	kind: "device" | "tool" | "panel";
+	subject: string | null;
+	device: string | null;
+	platform: string | null;
+	actor_email: string | null;
+}
+
+/** A note's history as the server keeps it, newest first. */
+export interface NoteHistory {
+	note: { doc_id: string; path: string; deleted: boolean };
+	versions: NoteVersion[];
+	activity: NoteActivity[];
+}
+
+/** One version with its text. */
+export interface VersionText {
+	id: VersionId;
+	doc_id: string;
+	path: string;
+	ts: number;
+	text: string;
 }
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<HttpAnswer>;
@@ -163,6 +207,83 @@ export class KnapServer {
 			throw new KnapServerError(body.error ?? "The server did not answer.", response.status);
 		}
 		return body.link;
+	}
+
+	// -- a note's history ----------------------------------------------------
+
+	/**
+	 * One note's versions and who edited it, newest first.
+	 *
+	 * Null when the server keeps no history for it yet, which is a 404 and
+	 * an ordinary answer for a note nobody has changed since history began:
+	 * the screen says *No versions yet* rather than an error. A vault this
+	 * account is not in answers 404 too, and reads the same, because the
+	 * server will not say which of the two it is.
+	 */
+	async noteHistory(token: string, vaultId: string, docId: string): Promise<NoteHistory | null> {
+		const response = await this.fetchFn(
+			`${this.vaultApi(vaultId)}/history/${encodeURIComponent(docId)}`,
+			{ headers: { Authorization: `Bearer ${token}` } },
+		);
+		if (response.status === 404) return null;
+		this.refuse(response, "The history did not load.");
+		const body = (await response.json()) as Partial<NoteHistory>;
+		return {
+			note: body.note ?? { doc_id: docId, path: "", deleted: false },
+			versions: body.versions ?? [],
+			activity: body.activity ?? [],
+		};
+	}
+
+	/** One version's text. */
+	async version(token: string, vaultId: string, versionId: VersionId): Promise<VersionText> {
+		const response = await this.fetchFn(
+			`${this.vaultApi(vaultId)}/versions/${encodeURIComponent(String(versionId))}`,
+			{ headers: { Authorization: `Bearer ${token}` } },
+		);
+		if (response.status === 404) {
+			throw new KnapServerError("This version is no longer there.", 404);
+		}
+		this.refuse(response, "This version did not load.");
+		return (await response.json()) as VersionText;
+	}
+
+	/**
+	 * Put an old version back, on the server.
+	 *
+	 * Never by writing the file here: the server saves the current text as a
+	 * version first and puts the old text into the live note as a change, so
+	 * it reaches every device through sync. A restore written to a local file
+	 * is one a stale device can write straight back over.
+	 */
+	async restore(
+		token: string,
+		vaultId: string,
+		versionId: VersionId,
+	): Promise<{ path: string; doc_id: string; revived: boolean }> {
+		const response = await this.fetchFn(
+			`${this.vaultApi(vaultId)}/versions/${encodeURIComponent(String(versionId))}/restore`,
+			{ method: "POST", headers: { Authorization: `Bearer ${token}` } },
+		);
+		if (response.status === 404) {
+			throw new KnapServerError("This version is no longer there.", 404);
+		}
+		this.refuse(response, "The restore did not go through. Nothing was changed.");
+		return (await response.json()) as { path: string; doc_id: string; revived: boolean };
+	}
+
+	private vaultApi(vaultId: string): string {
+		return `${this.baseUrl}/api/vaults/${encodeURIComponent(vaultId)}`;
+	}
+
+	/** Throw for a 401 or any other refusal; return quietly on a 2xx. */
+	private refuse(response: HttpAnswer, otherwise: string): void {
+		if (response.status === 401) {
+			throw new KnapServerError("Not signed in any more. Sign in again.", 401);
+		}
+		if (!response.ok) {
+			throw new KnapServerError(otherwise, response.status);
+		}
 	}
 
 	/** The cloud vaults this account may open. */

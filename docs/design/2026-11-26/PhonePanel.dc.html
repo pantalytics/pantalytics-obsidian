@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone right drawer with note info</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#a68af9}a:hover{color:#c4b5fd}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; background: #141414; color: #dadada; font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; font-size: 15px; overflow: hidden; border-radius: 28px">
+  <a href="Phone.dc.html" aria-label="Close" style="width: 50px; background: rgba(30,30,30,.6); display: block"></a>
+  <div style="flex: 1; background: #262626; display: flex; flex-direction: column; min-width: 0">
+    <div style="height: 54px"></div>
+    <div style="height: 48px; display: flex; align-items: center; gap: 18px; padding: 0 16px; border-bottom: 1px solid #363636; color: #8a8a8a">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"></path><path d="M15 7h2a5 5 0 1 1 0 10h-2"></path><path d="M8 12h8"></path></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"></path><path d="M7 12h14"></path><path d="M11 18h10"></path></svg>
+      <span style="display: inline-flex; padding: 5px; border-radius: 6px; background: #363636; color: #4ade80"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"></path><path d="M21 3v5h-5"></path><path d="M3 21v-5h5"></path></svg></span>
+    </div>
+    <div style="padding: 16px 18px 4px; font-weight: 600; color: #ececec">Acme renewal 2027</div>
+    <div style="padding: 6px 18px 14px; display: grid; grid-template-columns: 104px minmax(0, 1fr); row-gap: 8px; column-gap: 10px; font-size: 14px">
+      <span style="color: #9a9a9a">Sync</span><span style="display: inline-flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #4ade80"></span>Up to date</span>
+      <span style="color: #9a9a9a">Created</span><span>12 Nov</span>
+    </div>
+    <div style="padding: 14px 18px 6px; border-top: 1px solid #363636; font-size: 12px; letter-spacing: .04em; color: #8a8a8a">VERSION HISTORY</div>
+    <div style="display: flex; flex-direction: column; padding: 0 8px">
+      <sc-for list="{{ rows }}" as="v" hint-placeholder-count="4">
+        <a href="PhoneVersion.dc.html" style="display: grid; grid-template-columns: 56px minmax(0, 1fr) 16px; align-items: center; column-gap: 8px; min-height: 52px; padding: 4px 10px; border-radius: 6px; text-decoration: none; color: #dadada">
+          <span style="color: #b3b3b3; font-size: 14px">{{ v.time }}</span>
+          <span style="display: flex; flex-direction: column; min-width: 0">
+            <span style="font-size: 14px">{{ v.who }}</span>
+            <span style="color: {{ v.howColor }}; font-size: 12px">{{ v.how }}</span>
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8a8a" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+        </a>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const typed = '#9a9a9a', ai = '#9a9a9a', restored = '#9a9a9a';
+    return {
+      rows: [
+        { time: '14:02', who: 'Daniel, iPhone', how: 'Typed in Obsidian', howColor: typed },
+        { time: '13:10', who: 'Rutger', how: 'Written by AI', howColor: ai },
+        { time: '09:31', who: 'Rutger, Mac', how: 'Typed in Obsidian', howColor: typed },
+        { time: 'Yesterday', who: 'Rutger', how: 'Put back', howColor: restored },
+        { time: '24 Nov', who: 'Daniel, Mac', how: 'Typed in Obsidian', howColor: typed }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

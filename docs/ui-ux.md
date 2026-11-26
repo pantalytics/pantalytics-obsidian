@@ -301,12 +301,81 @@ word one vault two ways**, which is the whole reason it is read there and not
 computed beside the icon. The bar is absent rather than empty when nothing is
 moving: an empty track beside a finished vault reads as work that never started.
 
-**Clicking it opens the settings screen, and that is all it does.** There was a
-menu behind it with Sync vault and Sync this file above Settings. Sync is not a
-thing a person asks for here: it is running or it is not, and the corner already
-says which. A button that tells it to do what it does anyway asks somebody to
-make a decision and hands them no outcome for it, and the one time it would have
-mattered, a vault that is stuck, pressing it changes nothing either.
+**Clicking it opens a menu of facts, not of actions** (2026-11-26). There was
+a menu once with Sync vault and Sync this file, and it went because sync is not
+a thing a person asks for here: it is running or it is not. What came back is
+what a person wants to know about the note in front of them. See *A note's
+history* below.
+
+## A note's history
+
+Approved 2026-11-26. Per note, a person sees whether the vault is live, who
+changed this note last and when, when it was made, its versions, and can put
+an old one back. Three places, all Obsidian's own parts: a `Menu`, an
+`ItemView` in the right sidebar and an `ItemView` in a tab. The code is
+`src/knap/history/`.
+
+```
+  the corner, clicked:                the sidebar:
+  ┌─────────────────────────────────┐ ┌ Version history ─────────────┐
+  │ Up to date, just now            │ │ Plans                        │
+  │ Last changed: Daniel, 3 min ago │ │ Created 12 Nov               │
+  │ Created: 12 Nov                 │ │ Today                        │
+  │ Version history                 │ │ 14:02                        │
+  └─────────────────────────────────┘ │ Daniel · Typed in Obsidian   │
+                                      │ Yesterday                    │
+                                      │ 18:40                        │
+                                      │ Rutger · Before an AI edit   │
+                                      └──────────────────────────────┘
+```
+
+**The corner.** The first line is the word and when the vault was last up to
+date: *Up to date, just now*, or *Offline, since 14:02*. With a note open,
+two lines to read, *Last changed* (the newest edit the server recorded, by
+the name in the address, else the device; *AI for Daniel* when an AI wrote it) and *Created* (off the file), then
+*Version history*. Under Problem only, *Try again*, the same retry as the
+settings strip. No Settings item: Obsidian already has a place for settings.
+With no note open, the menu is the status line alone. Signed out or not
+linked, the corner still opens Settings, because that is where the way on is. The menu opens at once
+when the history was asked for in the last half minute, and otherwise waits
+at most 0.6 s for it, opening without *Last changed* rather than hanging.
+
+**The sidebar** follows the open note: its name, *Created*, and the versions
+grouped *Today*, *Yesterday* and by date, each a time, a person and what it
+holds. The server takes a version two ways, and the words follow the data, not
+a guess: *Typed in Obsidian* is the note after typing, and the person is every
+device the server saw editing it since the version before (the edit rows of
+admin ADR-0115; nobody when there is no row). *Before an AI edit* and *Before
+a restore* are the text a write replaced, kept so it can be put back, with the
+person the AI worked for or who restored. A version never says *Written by
+AI*: the server does not keep what the AI wrote as a version, only what was
+there before it. *Not recorded* is a version from before ADR-0083. *Created* is the file's date, or the oldest
+version's when that is earlier: a note that arrived through sync carries the
+day it landed on this device. A note without history says *No versions
+yet.* and nothing else. A quick answer never shows *Loading...*: that line
+waits 0.4 s, so the list replaces the last one without a third state.
+
+**The version** opens in a tab, read-only: the version's text with its
+difference from the note marked in place, struck through for what Restore
+would take out and highlighted for what it would bring back. Close and
+Restore, and Restore is the only filled button. It asks first, *Restore the
+version of today at 14:02?*, and adds one line when somebody else has the
+note open in an editor now, because theirs is the screen that changes. Offline
+or signed out, Restore is greyed out with *Restore needs a connection.* as its
+tooltip. After it: a notice, *Restored*, the sidebar reloads and the tab
+closes.
+
+**Restore happens on the server, never in the file here.** The server keeps
+the current text as a version first and puts the old text into the live note
+as a change, which reaches every device through sync. A restore written to the
+local file is one a stale device can undo: a phone that last synced an hour
+ago through Obsidian Sync, or any other copy, writes its old file back and the
+restore is gone without anybody seeing it go.
+
+**On a phone** there is no corner. The same icon, in the same colour as the
+vault's state, sits in each note's header, and a tap opens the versions in the
+right drawer. Everywhere, *Version history* is also in a note's file menu and
+in the palette as *Open version history*.
 
 ## Choosing a cloud vault
 

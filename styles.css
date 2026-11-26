@@ -1074,3 +1074,99 @@
 body.is-mobile .cm-editor .knap-caret-name {
 	opacity: 1;
 }
+
+/* A note's history (src/knap/history/). Obsidian's variables only: the
+   sidebar reads like the outline beside it, the version tab like a note. */
+.knap-history-title {
+	font-weight: var(--font-semibold);
+	padding: var(--size-4-2) var(--size-4-2) 0;
+}
+
+.knap-history-muted {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.knap-history-title + .knap-history-muted,
+.knap-history-note {
+	padding: 0 var(--size-4-2);
+}
+
+.knap-history-note {
+	padding-top: var(--size-4-2);
+}
+
+.knap-history-day {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	padding: var(--size-4-4) var(--size-4-2) var(--size-4-1);
+}
+
+.knap-history-row {
+	display: block;
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+}
+
+.knap-history-time {
+	color: var(--text-normal);
+}
+
+.knap-version-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
+	padding-bottom: var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.knap-version-when {
+	font-weight: var(--font-semibold);
+}
+
+.knap-version-buttons {
+	display: flex;
+	gap: var(--size-4-2);
+	flex-shrink: 0;
+}
+
+/* A disabled button takes no pointer, so its wrapper gets the tooltip. */
+.knap-version-restore button:disabled {
+	pointer-events: none;
+}
+
+.knap-version-text {
+	white-space: pre-wrap;
+	font-family: var(--font-text);
+	user-select: text;
+}
+
+.knap-mark-added {
+	text-decoration: none;
+	color: var(--text-success);
+	background-color: rgba(var(--color-green-rgb), 0.15);
+}
+
+.knap-mark-removed {
+	color: var(--text-error);
+	background-color: rgba(var(--color-red-rgb), 0.1);
+}
+
+/* The corner's icon in a note's header on a phone, in the vault's colour. */
+.knap-action.knap-action-ok {
+	color: var(--color-green);
+}
+
+.knap-action.knap-action-working {
+	color: var(--interactive-accent);
+}
+
+.knap-action.knap-action-wait {
+	color: var(--text-faint);
+}
+
+.knap-action.knap-action-error {
+	color: var(--text-error);
+}

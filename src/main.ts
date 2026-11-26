@@ -1428,10 +1428,11 @@ export default class Live extends Plugin {
 	 * The Knap item in the status bar.
 	 *
 	 * The icon carries the state, so the ordinary case is a green mark in the
-	 * corner and nothing to do. Clicking it opens the settings screen, and
-	 * that is the whole of it: there used to be a menu with Sync vault and
-	 * Sync this file above it, and a button that tells a sync layer to do what
-	 * it already does adds a decision without adding an outcome.
+	 * corner and nothing to do. Clicking it opens a menu of facts: the word
+	 * and since when, who changed the open note last and when it was made,
+	 * and the way into its versions (`knap/history/`). Still no Sync vault
+	 * and no Sync this file: a button that tells a sync layer to do what it
+	 * already does adds a decision without adding an outcome.
 	 *
 	 * While notes are moving the count sits next to the icon (#41), and the bar
 	 * sits after it. This is the machine doing the work, and somebody who has
@@ -1442,6 +1443,12 @@ export default class Live extends Plugin {
 	 */
 	/** What the corner is saying, which lags what the vault is doing. */
 	private corner: Burst = STILL;
+	/** What a click on the corner opens: the note history's menu (`history/ObsidianHistory.ts`). */
+	private cornerMenu: ((evt: MouseEvent) => boolean) | null = null;
+
+	setCornerMenu(open: (evt: MouseEvent) => boolean): void {
+		this.cornerMenu = open;
+	}
 
 	private addRelayStatusBarItem() {
 		const statusBarItem = this.addStatusBarItem();
@@ -1475,9 +1482,11 @@ export default class Live extends Plugin {
 		// inside the folder (`SharedFolder.INBOUND_TTL_MS`).
 		this.registerInterval(window.setInterval(paint, 1000));
 
-		statusBarItem.addEventListener("click", () => {
+		statusBarItem.addEventListener("click", (evt) => {
 			paint();
-			void this.openSettings("/relay-onprem");
+			// The menu, when there is a linked vault to say things about;
+			// Settings while signed out or not linked, where the way on is.
+			if (!this.cornerMenu?.(evt)) void this.openSettings("/relay-onprem");
 		});
 	}
 
