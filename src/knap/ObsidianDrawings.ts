@@ -84,15 +84,33 @@ export function adapt(api: ExcalidrawApi, element: HTMLElement): ExcalidrawLike 
 					button,
 				});
 			};
-			const down = () => (button = "down");
-			const up = () => (button = "up");
+			const down = (event: PointerEvent) => {
+				button = "down";
+				move(event);
+			};
+			// A finger or a pen that lifts has left the drawing; a mouse is
+			// still there, hovering. A pan, a pinch or a palm the browser
+			// takes over ends in pointercancel instead of pointerup.
+			const up = (event: PointerEvent) => {
+				button = "up";
+				if (event.pointerType === "mouse") move(event);
+				else callback(null);
+			};
+			const gone = () => {
+				button = "up";
+				callback(null);
+			};
 			element.addEventListener("pointermove", move);
 			element.addEventListener("pointerdown", down);
 			element.addEventListener("pointerup", up);
+			element.addEventListener("pointercancel", gone);
+			element.addEventListener("pointerleave", gone);
 			return () => {
 				element.removeEventListener("pointermove", move);
 				element.removeEventListener("pointerdown", down);
 				element.removeEventListener("pointerup", up);
+				element.removeEventListener("pointercancel", gone);
+				element.removeEventListener("pointerleave", gone);
 			};
 		},
 	};

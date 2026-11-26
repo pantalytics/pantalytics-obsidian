@@ -23,6 +23,17 @@ import type { Awareness } from "y-protocols/awareness";
 export const CURSOR_FIELD = "cursor";
 /** The awareness field naming who is holding it. */
 export const USER_FIELD = "user";
+/**
+ * A counter a device bumps while it types. A counter rather than a time,
+ * because two devices' clocks do not agree: the reader notes when it saw the
+ * counter move, on its own clock.
+ */
+export const TYPING_FIELD = "typing";
+
+/** How long a peer counts as typing, or as just having moved, after the last sign. */
+export const ACTIVE_MS = 3000;
+/** At most one typing sign per this many milliseconds: awareness goes to everybody. */
+const TYPING_EVERY_MS = 1000;
 
 /** Where a device's selection starts and ends. Equal ends mean a caret. */
 export interface CursorState {
@@ -46,6 +57,10 @@ export interface CursorUser {
 export interface RemoteCursor extends CursorUser {
 	clientId: number;
 	ai: boolean;
+	/** Moved or typed in the last ACTIVE_MS: its name is shown without a hover. */
+	active: boolean;
+	/** Typed in the last ACTIVE_MS. */
+	typing: boolean;
 	/** The lower of anchor and head, in editor offsets. */
 	from: number;
 	/** The higher of the two. Equal to `from` for a caret. */
@@ -125,6 +140,56 @@ export function publishCursor(
 	});
 }
 
+const lastTypingSign = new WeakMap<Awareness, number>();
+
+/** Say "I am typing" to everybody in the note, at most once a second. */
+export function publishTyping(awareness: Awareness, now: number = Date.now()): void {
+	const last = lastTypingSign.get(awareness) ?? 0;
+	if (now - last < TYPING_EVERY_MS) return;
+	lastTypingSign.set(awareness, now);
+	const count = Number((awareness.getLocalState() ?? {})[TYPING_FIELD] ?? 0);
+	awareness.setLocalStateField(TYPING_FIELD, count + 1);
+}
+
+/**
+ * When each peer last moved its caret or typed, on this device's clock.
+ * Fed from awareness's own change events, so it costs nothing while nobody
+ * does anything.
+ */
+export class PeerActivity {
+	private readonly seen = new Map<number, { cursor: string; typing: unknown }>();
+	private readonly movedAt = new Map<number, number>();
+	private readonly typedAt = new Map<number, number>();
+
+	/** Note what changed for the given clients. */
+	observe(awareness: Awareness, clients: Iterable<number>, now: number = Date.now()): void {
+		const states = awareness.getStates();
+		for (const clientId of clients) {
+			const state = states.get(clientId) as Record<string, unknown> | undefined;
+			if (!state) {
+				this.seen.delete(clientId);
+				this.movedAt.delete(clientId);
+				this.typedAt.delete(clientId);
+				continue;
+			}
+			const cursor = JSON.stringify(state[CURSOR_FIELD] ?? null);
+			const typing = state[TYPING_FIELD];
+			const before = this.seen.get(clientId);
+			if (before && before.cursor !== cursor && state[CURSOR_FIELD]) this.movedAt.set(clientId, now);
+			if (before && typing !== undefined && before.typing !== typing) this.typedAt.set(clientId, now);
+			this.seen.set(clientId, { cursor, typing });
+		}
+	}
+
+	active(clientId: number, now: number = Date.now()): boolean {
+		return this.typing(clientId, now) || now - (this.movedAt.get(clientId) ?? -Infinity) < ACTIVE_MS;
+	}
+
+	typing(clientId: number, now: number = Date.now()): boolean {
+		return now - (this.typedAt.get(clientId) ?? -Infinity) < ACTIVE_MS;
+	}
+}
+
 /** Stop claiming a cursor in this note, without waiting for the socket. */
 export function withdrawCursor(awareness: Awareness): void {
 	awareness.setLocalStateField(CURSOR_FIELD, null);
@@ -139,7 +204,12 @@ export function withdrawCursor(awareness: Awareness): void {
  * of the text are skipped for the same reason, which is the case a device
  * that is mid-sync produces.
  */
-export function readCursors(awareness: Awareness, text: Y.Text): RemoteCursor[] {
+export function readCursors(
+	awareness: Awareness,
+	text: Y.Text,
+	activity?: PeerActivity,
+	now: number = Date.now(),
+): RemoteCursor[] {
 	const doc = text.doc;
 	if (!doc) return [];
 	const length = text.length;
@@ -158,6 +228,8 @@ export function readCursors(awareness: Awareness, text: Y.Text): RemoteCursor[] 
 			name,
 			color: user.color || colorFor(name),
 			ai: user.ai === true,
+			active: activity?.active(clientId, now) ?? false,
+			typing: activity?.typing(clientId, now) ?? false,
 			from: Math.min(anchor, head),
 			to: Math.max(anchor, head),
 			head,

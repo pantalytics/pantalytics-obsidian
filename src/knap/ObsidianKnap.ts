@@ -26,7 +26,7 @@ import type { ServerNotice } from "./notices";
 import { knapLiveEditing } from "./knapEditor";
 import { followDrawings } from "./ObsidianDrawings";
 import { drawingLatency } from "./drawingLatency";
-import { sendSpeedReport, setSpeedCredential, startSpeedReports } from "./ObsidianSpeedReport";
+import { platform, sendSpeedReport, setSpeedCredential, startSpeedReports } from "./ObsidianSpeedReport";
 import { KnapSync } from "./KnapSync";
 import type { KnapLink } from "./KnapSync";
 import { ObsidianConfigBases } from "./ObsidianConfigBases";
@@ -181,6 +181,7 @@ export function registerKnapBeta(host: KnapHost): KnapSync | null {
 	const sync = new KnapSync({
 		serverUrl,
 		deviceName: device,
+		platform: platform(),
 		fetchFn: obsidianFetch,
 		files: new ObsidianFileStore(host.app.vault, host.app.fileManager),
 		load: () => host.getKnapLink(),
