@@ -30,6 +30,8 @@ jest.mock("obsidian", () => ({
 	},
 	setIcon: () => undefined,
 	Setting: class {},
+	// A note's history registers two views, which extend this at load.
+	ItemView: class {},
 }));
 
 const vaults = [

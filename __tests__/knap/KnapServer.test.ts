@@ -220,4 +220,74 @@ describe("KnapServer", () => {
 			);
 		}
 	});
+
+	it("reads a note's history, and takes a 404 for no history yet", async () => {
+		const history = {
+			note: { doc_id: "d1", path: "Plans.md", deleted: false },
+			versions: [
+				{
+					id: "v9",
+					path: "Plans.md",
+					ts: 1764150000,
+					sha256: "ab",
+					actor_kind: "typed",
+					actor_subject: "s",
+					actor_email: "daniel@acme.test",
+				},
+			],
+			activity: [],
+		};
+		const { fetchFn, calls } = fakeFetch({
+			"/api/vaults/v%201/history/d1": () =>
+				new Response(JSON.stringify(history), { status: 200 }),
+		});
+		const server = new KnapServer("https://knap.test", fetchFn);
+
+		expect(await server.noteHistory("tok", "v 1", "d1")).toEqual(history);
+		expect(calls[0].url).toBe("https://knap.test/api/vaults/v%201/history/d1");
+		expect((calls[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+		expect(await server.noteHistory("tok", "v 1", "unknown")).toBeNull();
+	});
+
+	it("says sign in again when the history answers 401", async () => {
+		const { fetchFn } = fakeFetch({
+			"/history/": () => new Response("{}", { status: 401 }),
+		});
+		const server = new KnapServer("https://knap.test", fetchFn);
+		await expect(server.noteHistory("tok", "v1", "d1")).rejects.toMatchObject({ status: 401 });
+	});
+
+	it("reads one version's text", async () => {
+		const { fetchFn, calls } = fakeFetch({
+			"/api/vaults/v1/versions/v9": () =>
+				new Response(
+					JSON.stringify({ id: "v9", doc_id: "d1", path: "Plans.md", ts: 1, text: "old" }),
+					{ status: 200 },
+				),
+		});
+		const server = new KnapServer("https://knap.test", fetchFn);
+		expect((await server.version("tok", "v1", "v9")).text).toBe("old");
+		expect(calls[0].init?.method).toBeUndefined();
+		await expect(server.version("tok", "v1", "gone")).rejects.toThrow(/no longer there/);
+	});
+
+	it("restores on the server with a POST, and says when it did not", async () => {
+		const { fetchFn, calls } = fakeFetch({
+			"/api/vaults/v1/versions/v9/restore": () =>
+				new Response(JSON.stringify({ path: "Plans.md", doc_id: "d1", revived: false }), {
+					status: 200,
+				}),
+			"/api/vaults/v1/versions/v8/restore": () => new Response("{}", { status: 500 }),
+		});
+		const server = new KnapServer("https://knap.test", fetchFn);
+
+		expect(await server.restore("tok", "v1", "v9")).toEqual({
+			path: "Plans.md",
+			doc_id: "d1",
+			revived: false,
+		});
+		expect(calls[0].init?.method).toBe("POST");
+		await expect(server.restore("tok", "v1", "v8")).rejects.toThrow(/Nothing was changed/);
+		await expect(server.restore("tok", "v1", "v7")).rejects.toThrow(/no longer there/);
+	});
 });

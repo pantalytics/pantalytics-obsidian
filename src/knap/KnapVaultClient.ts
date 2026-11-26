@@ -247,6 +247,16 @@ export class KnapVaultClient {
 	}
 
 	/**
+	 * The awareness of a note this device already has open, or null.
+	 *
+	 * Never opens one: asking who is in a note must not cost a socket, and a
+	 * note nobody here has open is one this device cannot see anybody in.
+	 */
+	awarenessOf(docId: string): PinnedNote["provider"]["awareness"] | null {
+		return this.open.get(docId)?.provider.awareness ?? null;
+	}
+
+	/**
 	 * Told when a note's socket goes down, so whoever was watching that
 	 * document can let go of it. The pool closes notes on its own schedule,
 	 * and an observer on a document nobody is syncing any more is a callback
