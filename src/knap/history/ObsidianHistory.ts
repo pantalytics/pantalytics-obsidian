@@ -3,33 +3,32 @@
  * version tab, the file menu, a command, and on a phone a button in each
  * note's header.
  *
- * The corner of the window used to open Settings. It opens a menu now: how
- * the vault is and since when, who changed the open note last and when it
- * was made, and the way into its versions. A phone has no corner, so the
- * same icon in the same colour sits in the note's own header there, and a
- * tap opens the versions in the right drawer.
+ * The corner of the window opens a small panel in two blocks: how the vault
+ * is (signed in, linked, moving or not), and how the open note is (synced or
+ * not, who changed it last, when it was made, its versions). A phone has no
+ * corner, so the same icon in the same colour sits in the note's own header
+ * there, and a tap opens the same panel as a sheet.
  */
 
-import { MarkdownView, Menu, Notice, Platform, Plugin, TFile } from "obsidian";
+import { MarkdownView, Notice, Platform, Plugin, TFile } from "obsidian";
 
 import { PLUGIN_ID } from "../../pluginId";
-import { PROBLEM, SIGNED_OUT, UP_TO_DATE } from "../../syncStatus";
-import type { KnapSync } from "../KnapSync";
+import { SIGNED_OUT } from "../../syncStatus";
+import { checkedCounts, type KnapSync } from "../KnapSync";
 import type { VersionId } from "../KnapServer";
-import { cornerItems } from "./cornerMenu";
+import { cornerPanel, type NoteInput } from "./cornerPanel";
+import { CornerPanelView } from "./cornerPanelView";
 import { FRESH_MS, HistoryService } from "./HistoryService";
 import { VersionHistoryView, VIEW_HISTORY } from "./VersionHistoryView";
 import { VersionView, VIEW_VERSION } from "./VersionView";
-import { createdAt, lastChange, madeBy, shortDate, statusLine, versionWho } from "./words";
-
-/** How long the corner's menu waits for a history it does not have, before it opens without it. */
-const MENU_WAIT_MS = 600;
+import { createdAt, lastChange, madeBy, versionWho } from "./words";
 
 /** What the plugin gets back: the corner's click. */
 export interface NoteHistoryUi {
 	/**
-	 * Open the corner's menu. False when there is nothing to say yet, signed
-	 * out or not linked, and the corner opens Settings, where the way on is.
+	 * Open the corner's panel, or close it when it is open. False when there
+	 * is nothing to say yet, signed out or not linked, and the corner opens
+	 * Settings, where the way on is.
 	 */
 	openCornerMenu(evt: MouseEvent): boolean;
 }
@@ -99,67 +98,101 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 		},
 	});
 
-	if (Platform.isMobile) {
-		headerActions(host, service, () => void openHistory(app.workspace.getActiveFile()?.path));
-	}
+	/** The note whose history was last asked for, so a tick asks once per note. */
+	let asked = "";
 
-	const openCornerMenu = (evt: MouseEvent): boolean => {
-		if (!service.linked || sync.status().word === SIGNED_OUT) return false;
+	/**
+	 * Who changed the note last comes off its history. The panel opens at
+	 * once and fills it in when the server answers, also for a note opened
+	 * while the panel is up, so a slow server never holds it back.
+	 */
+	const askHistory = (path: string) => {
+		if (path === asked || service.peek(path, FRESH_MS) !== undefined || !service.canReach()) return;
+		asked = path;
+		void service
+			.history(path)
+			.catch(() => null)
+			.then(() => panel.render());
+	};
+
+	/** What the panel says right now: the vault, and the open file when there is one. */
+	const readPanel = () => {
+		const now = Date.now();
+		const status = sync.status();
 		const file = app.workspace.getActiveFile();
-		const note = file && file.extension === "md" && service.hasNote(file.path) ? file : null;
-		const show = () => {
-			const now = Date.now();
-			const status = sync.status();
-			const history = note ? service.peek(note.path) : undefined;
+		let note: NoteInput | null = null;
+		// Notes only: an attachment's failures are counted on the vault, not
+		// per file, so a word about one would be a guess.
+		if (file && file.extension === "md") {
+			const facts = sync.noteSync(file.path);
+			if (facts.inCloud) askHistory(file.path);
+			// Any age: an older answer about who changed it is still true,
+			// and offline there is no newer one to ask for.
+			const history = facts.inCloud ? service.peek(file.path, Infinity) : undefined;
 			const last = history ? lastChange(history.activity, now) : null;
-			const menu = new Menu();
-			const items = cornerItems({
-				status: statusLine(status.word, status.upToDateAt, now, status.word === UP_TO_DATE),
-				problem: status.word === PROBLEM,
-				note: file && file.extension === "md"
-					? {
-							lastChanged: last ? `${last.who}, ${last.when}` : null,
-							created: shortDate(createdAt(file.stat.ctime, history?.versions), now),
-							synced: note !== null,
-						}
-					: null,
-			});
-			for (const entry of items) {
-				menu.addItem((item) => {
-					item.setTitle(entry.title);
-					if (entry.kind === "info") item.setDisabled(true);
-					if (entry.kind === "history") {
-						item.setIcon("history").onClick(() => void openHistory(file?.path));
-					}
-					if (entry.kind === "retry") {
-						item.setIcon("refresh-cw").onClick(() => {
-							sync.retry().catch((error: Error) => new Notice(error.message));
-						});
-					}
-				});
-			}
-			menu.showAtPosition({ x: evt.clientX, y: evt.clientY });
+			note = {
+				facts,
+				lastChanged: last ? `${last.who}, ${last.when}` : null,
+				created: createdAt(file.stat.ctime, history?.versions),
+				history: facts.inCloud,
+			};
+		}
+		const vault = {
+			word: status.word,
+			dot: status.dot,
+			up: status.up + status.files.up,
+			down: status.down + status.files.down,
+			checked: checkedCounts(status),
+			problems: status.problems,
+			upToDateAt: status.upToDateAt,
 		};
-		// A history asked for in the last half minute is used as it is; one
-		// that is not gets a short wait, so the menu opens with who changed
-		// the note when the server is quick, and without it when it is not.
-		if (!note || service.peek(note.path, FRESH_MS) !== undefined || !service.canReach()) {
-			show();
+		return cornerPanel(vault, note, now);
+	};
+
+	const panel = new CornerPanelView(readPanel, {
+		history: () => void openHistory(app.workspace.getActiveFile()?.path),
+		retryVault: () => {
+			sync.retry().catch((error: Error) => new Notice(error.message));
+		},
+		retryNote: () => {
+			const path = app.workspace.getActiveFile()?.path;
+			if (path) sync.retryNote(path).catch((error: Error) => new Notice(error.message));
+		},
+	});
+	host.register(() => panel.close());
+
+	/** Open the panel, or close it when it is open. */
+	const openPanel = (anchor: HTMLElement | null, sheet = false): boolean => {
+		if (panel.isOpen) {
+			panel.close();
 			return true;
 		}
-		const wait = new Promise((resolve) => window.setTimeout(resolve, MENU_WAIT_MS));
-		void Promise.race([service.history(note.path).catch(() => null), wait]).then(show);
+		if (!service.linked || sync.status().word === SIGNED_OUT) return false;
+		asked = "";
+		panel.open(anchor, sheet);
 		return true;
 	};
+
+	const openCornerMenu = (evt: MouseEvent): boolean =>
+		openPanel(evt.currentTarget instanceof HTMLElement ? evt.currentTarget : null);
+
+	if (Platform.isMobile) {
+		headerActions(host, service, (evt) => {
+			if (openPanel(evt.currentTarget instanceof HTMLElement ? evt.currentTarget : null, true)) return;
+			const setting = (app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+			setting?.open();
+			setting?.openTabById(host.manifest.id);
+		});
+	}
 
 	return { openCornerMenu };
 }
 
 /**
  * The corner's icon on a phone, in each note's header: the same mark, in the
- * same colour as the vault's state, and a tap opens the versions.
+ * same colour as the vault's state, and a tap opens the same panel as a sheet.
  */
-function headerActions(host: Plugin, service: HistoryService, open: () => void): void {
+function headerActions(host: Plugin, service: HistoryService, open: (evt: MouseEvent) => void): void {
 	const sync = service.sync;
 	const done = new WeakSet<MarkdownView>();
 	let icons: HTMLElement[] = [];
@@ -178,7 +211,7 @@ function headerActions(host: Plugin, service: HistoryService, open: () => void):
 			// Only in a linked vault: a vault that syncs nowhere has no history.
 			if (!(view instanceof MarkdownView) || done.has(view) || !service.linked) continue;
 			done.add(view);
-			const icon = view.addAction(PLUGIN_ID, "Version history", open);
+			const icon = view.addAction(PLUGIN_ID, "Sync", open);
 			icon.addClass("knap-action");
 			icons.push(icon);
 		}

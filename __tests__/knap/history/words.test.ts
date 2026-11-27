@@ -15,7 +15,6 @@ import {
 	madeBy,
 	personName,
 	shortDate,
-	statusLine,
 	versionWhen,
 } from "../../../src/knap/history/words";
 
@@ -162,14 +161,5 @@ describe("when a note was created", () => {
 		expect(createdAt(at(26, 8, 0), versions)).toBe(at(3, 9, 0));
 		expect(createdAt(at(1, 8, 0), versions)).toBe(at(1, 8, 0));
 		expect(createdAt(at(1, 8, 0), undefined)).toBe(at(1, 8, 0));
-	});
-});
-
-describe("the status line", () => {
-	it("says just now while up to date, and since when otherwise", () => {
-		expect(statusLine("Up to date", NOW, NOW, true)).toBe("Up to date, just now");
-		expect(statusLine("Offline", at(26, 14, 2), NOW, false)).toBe("Offline, since 14:02");
-		expect(statusLine("Offline", at(20, 14, 2), NOW, false)).toBe("Offline, since 20 Nov");
-		expect(statusLine("Signed out", 0, NOW, false)).toBe("Signed out");
 	});
 });

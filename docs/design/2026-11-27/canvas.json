@@ -1,0 +1,14 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-11-27T10:00:00Z" },
+  "title": "Knap corner: vault and note",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1280, "h": 800, "title": "1 Corner: vault and note", "is_interactive": true },
+    "Phone.dc.html": { "x": 1360, "y": 0, "w": 390, "h": 844, "title": "2 Phone: tap the icon in the note header", "is_interactive": true }
+  },
+  "order": ["Main.dc.html", "Phone.dc.html"],
+  "notes": {},
+  "designSystems": []
+}

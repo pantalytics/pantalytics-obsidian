@@ -301,44 +301,82 @@ word one vault two ways**, which is the whole reason it is read there and not
 computed beside the icon. The bar is absent rather than empty when nothing is
 moving: an empty track beside a finished vault reads as work that never started.
 
-**Clicking it opens a menu of facts, not of actions** (2026-11-26). There was
-a menu once with Sync vault and Sync this file, and it went because sync is not
-a thing a person asks for here: it is running or it is not. What came back is
-what a person wants to know about the note in front of them. See *A note's
-history* below.
+**Clicking it opens a panel of facts, not of actions** (2026-11-27, which
+replaces the menu of 2026-11-26). There was a menu once with Sync vault and
+Sync this file, and it went because sync is not a thing a person asks for
+here: it is running or it is not. The panel answers the two questions the
+icon is clicked for, in this order: is the vault all right, and is the note
+in front of me all right.
+
+```
+  ┌─────────────────────────────────┐
+  │ Vault                           │
+  │ ● Up to date           just now │
+  ├─────────────────────────────────┤
+  │ Note                            │  ← the open note
+  │ ● Synced                        │
+  │ Last changed  Daniel, 3 min ago │
+  │ Created       12 Nov            │
+  ├─────────────────────────────────┤
+  │ Version history               › │
+  └─────────────────────────────────┘
+```
+
+Each block is headed by one word, *Vault* and *Note*: the names are already
+on the screen, in the settings and on the note's tab.
+
+**The vault block** is the word the corner already wears, with what it is
+waiting on at the far end: *just now*, *↑ 12 ↓ 340*, *290 of 3,127* during the
+pass at start, or *since 14:02*. Under Problem only, *N changes did not sync*
+and Try again, the same retry as the settings strip.
+
+**The note block** has four words of its own, from `history/cornerPanel.ts`,
+decided off facts the device has and never guessed:
+
+| Word | Dot | When |
+|---|---|---|
+| **Could not sync** | red | The note is stuck; its reason shows under it, with Try again for that note alone |
+| **Not synced yet** | accent | Work for it is queued here (a save not yet sent), it is being tried again, or it is not in the cloud vault while the vault is still moving; yellow while Offline, where an edit cannot have gone up |
+| **Only on this device** | yellow | Not in the cloud vault, and the vault says Up to date |
+| **Synced** | green | In the cloud vault, also while other notes move or are stuck |
+
+That last row is the point of the block: under Problem it says which note is
+not the problem. Then *Last changed*, *Created* and *Version history*, as
+below. The panel opens at once; *Last changed* fills in when the server
+answers, and is absent until then.
+
+It is not an Obsidian `Menu`, because a menu greys out every line that is not
+a command, and every line here is one to read. It borrows the menu's surface
+so it reads as Obsidian's. No Settings in it: Obsidian already has a place for
+settings, and signed out or not linked the corner still opens Settings
+directly. See *A note's history* below for what the versions do.
 
 ## A note's history
 
 Approved 2026-11-26. Per note, a person sees whether the vault is live, who
 changed this note last and when, when it was made, its versions, and can put
-an old one back. Three places, all Obsidian's own parts: a `Menu`, an
+an old one back. Three places: the corner's panel (2026-11-27, above), an
 `ItemView` in the right sidebar and an `ItemView` in a tab. The code is
 `src/knap/history/`.
 
 ```
-  the corner, clicked:                the sidebar:
-  ┌─────────────────────────────────┐ ┌ Version history ─────────────┐
-  │ Up to date, just now            │ │ Plans                        │
-  │ Last changed: Daniel, 3 min ago │ │ Created 12 Nov               │
-  │ Created: 12 Nov                 │ │ Today                        │
-  │ Version history                 │ │ 14:02                        │
-  └─────────────────────────────────┘ │ Daniel · Typed in Obsidian   │
-                                      │ Yesterday                    │
-                                      │ 18:40                        │
-                                      │ Rutger · Before an AI edit   │
-                                      └──────────────────────────────┘
+  the sidebar:
+  ┌ Version history ─────────────┐
+  │ Plans                        │
+  │ Created 12 Nov               │
+  │ Today                        │
+  │ 14:02                        │
+  │ Daniel · Typed in Obsidian   │
+  │ Yesterday                    │
+  │ 18:40                        │
+  │ Rutger · Before an AI edit   │
+  └──────────────────────────────┘
 ```
 
-**The corner.** The first line is the word and when the vault was last up to
-date: *Up to date, just now*, or *Offline, since 14:02*. With a note open,
-two lines to read, *Last changed* (the newest edit the server recorded, by
-the name in the address, else the device; *AI for Daniel* when an AI wrote it) and *Created* (off the file), then
-*Version history*. Under Problem only, *Try again*, the same retry as the
-settings strip. No Settings item: Obsidian already has a place for settings.
-With no note open, the menu is the status line alone. Signed out or not
-linked, the corner still opens Settings, because that is where the way on is. The menu opens at once
-when the history was asked for in the last half minute, and otherwise waits
-at most 0.6 s for it, opening without *Last changed* rather than hanging.
+**The corner** opens the panel described above under *The corner of the
+window*: the vault, then the open note with *Last changed* (the newest edit
+the server recorded, by the name in the address, else the device; *AI for
+Daniel* when an AI wrote it), *Created* (off the file) and *Version history*.
 
 **The sidebar** follows the open note: its name, *Created*, and the versions
 grouped *Today*, *Yesterday* and by date, each a time, a person and what it
@@ -373,8 +411,8 @@ ago through Obsidian Sync, or any other copy, writes its old file back and the
 restore is gone without anybody seeing it go.
 
 **On a phone** there is no corner. The same icon, in the same colour as the
-vault's state, sits in each note's header, and a tap opens the versions in the
-right drawer. Everywhere, *Version history* is also in a note's file menu and
+vault's state, sits in each note's header, and a tap opens the same panel as a
+sheet from the bottom. Everywhere, *Version history* is also in a note's file menu and
 in the palette as *Open version history*.
 
 ## Choosing a cloud vault

@@ -223,6 +223,12 @@ export class VaultBinding {
 	private stuck = new Map<string, string>();
 	/** Notes being tried again by themselves after a lost connection. */
 	private retries = new Map<string, { attempt: number; timer: number }>();
+	/**
+	 * Paths with work queued or running, by how many units: a note somebody
+	 * just saved, or one the pass at start is sending up. The corner's panel
+	 * says *Not synced yet* over these rather than Synced.
+	 */
+	private pending = new Map<string, number>();
 	/** Work taken on and not finished, by direction. Never edits. */
 	private outstanding = { up: 0, down: 0 };
 	/** The pass at start, counted as it goes. */
@@ -361,6 +367,28 @@ export class VaultBinding {
 	 */
 	get stuckNotes(): Array<{ path: string; reason: string }> {
 		return [...this.stuck].map(([path, reason]) => ({ path, reason }));
+	}
+
+	/**
+	 * Where one note stands on this device: why it would not sync, if it
+	 * would not, and whether it is waiting to be tried again by itself. The
+	 * corner's panel reads it for the note that is open.
+	 */
+	noteSync(path: string): { stuck: string | null; retrying: boolean; pending: boolean } {
+		return {
+			stuck: this.stuck.get(path) ?? null,
+			retrying: this.retries.has(path),
+			pending: this.pending.has(path),
+		};
+	}
+
+	private queued(path: string): () => void {
+		this.pending.set(path, (this.pending.get(path) ?? 0) + 1);
+		return () => {
+			const left = (this.pending.get(path) ?? 1) - 1;
+			if (left > 0) this.pending.set(path, left);
+			else this.pending.delete(path);
+		};
 	}
 
 	/** A note went through: it is neither stuck nor waiting to be tried again. */
@@ -571,6 +599,7 @@ export class VaultBinding {
 	}
 
 	private enqueue(work: () => Promise<void>, path?: string): Promise<void> {
+		const release = path !== undefined ? this.queued(path) : () => undefined;
 		const counted = async () => {
 			try {
 				await work();
@@ -581,6 +610,8 @@ export class VaultBinding {
 				// rememberTree below off the failure path, and the queue's own
 				// handler is what keeps one failure from stopping the next unit.
 				throw error;
+			} finally {
+				release();
 			}
 		};
 		// The record is written only where `work` returned: a unit that threw
@@ -768,11 +799,13 @@ export class VaultBinding {
 				await this.bindNote(path, docId);
 			}
 		});
+		const releases = new Map(up.map((path) => [path, this.queued(path)]));
 		await this.inWaves(up, async (path) => {
 			try {
 				await this.pushNote(path);
 			} finally {
 				this.outstanding.up -= 1;
+				releases.get(path)?.();
 			}
 		});
 		await this.inWaves(bind, async ([path, docId]) => {
