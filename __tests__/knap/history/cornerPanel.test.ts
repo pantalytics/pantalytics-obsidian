@@ -15,7 +15,6 @@ const at = (d: number, h: number, min: number) => new Date(2026, 10, d, h, min).
 const NOW = at(27, 15, 0);
 
 const vault = (over: Partial<VaultInput> = {}): VaultInput => ({
-	name: "Work notes",
 	word: "Up to date",
 	dot: "ok",
 	up: 0,
@@ -27,7 +26,7 @@ const vault = (over: Partial<VaultInput> = {}): VaultInput => ({
 });
 
 const cloud = { inCloud: true, stuck: null, retrying: false, pending: false };
-const note = { name: "Acme", facts: cloud, lastChanged: "Daniel, 3 min ago", created: at(12, 9, 0), history: true };
+const note = { facts: cloud, lastChanged: "Daniel, 3 min ago", created: at(12, 9, 0), history: true };
 
 describe("the vault's line", () => {
 	it("says just now, how much is moving, or since when", () => {
@@ -87,7 +86,6 @@ describe("the note's word", () => {
 
 	it("carries who changed it, when it was made, and whether it has versions", () => {
 		expect(cornerPanel(vault(), note, NOW).note).toEqual({
-			name: "Acme",
 			word: NOTE_SYNCED,
 			dot: "ok",
 			reason: "",

@@ -310,10 +310,10 @@ in front of me all right.
 
 ```
   ┌─────────────────────────────────┐
-  │ Work notes                      │  ← the cloud vault
+  │ Vault                           │
   │ ● Up to date           just now │
   ├─────────────────────────────────┤
-  │ Acme renewal 2027               │  ← the open note
+  │ Note                            │  ← the open note
   │ ● Synced                        │
   │ Last changed  Daniel, 3 min ago │
   │ Created       12 Nov            │
@@ -321,6 +321,9 @@ in front of me all right.
   │ Version history               › │
   └─────────────────────────────────┘
 ```
+
+Each block is headed by one word, *Vault* and *Note*: the names are already
+on the screen, in the settings and on the note's tab.
 
 **The vault block** is the word the corner already wears, with what it is
 waiting on at the far end: *just now*, *↑ 12 ↓ 340*, *290 of 3,127* during the

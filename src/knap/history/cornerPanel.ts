@@ -54,7 +54,6 @@ export function noteWord(vault: SyncWord, facts: NoteFacts): { word: NoteWord; d
 
 /** The vault, as `KnapSync.status()` reads it; only the parts the panel uses. */
 export interface VaultInput {
-	name: string;
 	word: SyncWord;
 	dot: SyncDot;
 	/** Notes and attachments still going up, and still coming down. */
@@ -67,7 +66,6 @@ export interface VaultInput {
 }
 
 export interface NoteInput {
-	name: string;
 	facts: NoteFacts;
 	/** "Daniel, 3 min ago", or null while the history has not said. */
 	lastChanged: string | null;
@@ -79,7 +77,6 @@ export interface NoteInput {
 
 export interface CornerPanel {
 	vault: {
-		name: string;
 		word: SyncWord;
 		dot: SyncDot;
 		/** "just now", "since 14:02", "↑ 12 ↓ 340", "290 of 3,127", or empty. */
@@ -88,7 +85,6 @@ export interface CornerPanel {
 		problem: string;
 	};
 	note: null | {
-		name: string;
 		word: NoteWord;
 		dot: SyncDot;
 		/** Why it would not sync, under Could not sync only, with Try again. */
@@ -122,7 +118,6 @@ export function cornerPanel(vault: VaultInput, note: NoteInput | null, now: numb
 	if (note) {
 		const { word, dot } = noteWord(vault.word, note.facts);
 		noteOut = {
-			name: note.name,
 			word,
 			dot,
 			reason: word === NOTE_STUCK ? (note.facts.stuck ?? "") : "",
@@ -132,7 +127,7 @@ export function cornerPanel(vault: VaultInput, note: NoteInput | null, now: numb
 		};
 	}
 	return {
-		vault: { name: vault.name, word: vault.word, dot: vault.dot, when: vaultWhen(vault, now), problem },
+		vault: { word: vault.word, dot: vault.dot, when: vaultWhen(vault, now), problem },
 		note: noteOut,
 	};
 }

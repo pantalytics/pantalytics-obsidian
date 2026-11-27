@@ -131,7 +131,6 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 			const history = facts.inCloud ? service.peek(file.path, Infinity) : undefined;
 			const last = history ? lastChange(history.activity, now) : null;
 			note = {
-				name: file.basename,
 				facts,
 				lastChanged: last ? `${last.who}, ${last.when}` : null,
 				created: createdAt(file.stat.ctime, history?.versions),
@@ -139,7 +138,6 @@ export function followHistory(host: Plugin, sync: KnapSync): NoteHistoryUi {
 			};
 		}
 		const vault = {
-			name: status.vaultName,
 			word: status.word,
 			dot: status.dot,
 			up: status.up + status.files.up,

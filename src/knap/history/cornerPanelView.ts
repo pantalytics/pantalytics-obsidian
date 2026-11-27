@@ -100,7 +100,7 @@ export class CornerPanelView {
 		el.empty();
 
 		const vault = el.createDiv({ cls: "knap-corner-block" });
-		if (panel.vault.name) vault.createDiv({ cls: "knap-corner-name", text: panel.vault.name });
+		vault.createDiv({ cls: "knap-corner-name", text: "Vault" });
 		line(vault, panel.vault.dot, panel.vault.word, panel.vault.when);
 		if (panel.vault.problem) {
 			again(vault, panel.vault.problem, () => this.act(() => this.actions.retryVault()));
@@ -109,7 +109,7 @@ export class CornerPanelView {
 		const note = panel.note;
 		if (!note) return;
 		const block = el.createDiv({ cls: "knap-corner-block" });
-		block.createDiv({ cls: "knap-corner-name", text: note.name });
+		block.createDiv({ cls: "knap-corner-name", text: "Note" });
 		line(block, note.dot, note.word, "");
 		if (note.reason) again(block, note.reason, () => this.act(() => this.actions.retryNote()));
 		const facts = block.createDiv({ cls: "knap-corner-facts" });
