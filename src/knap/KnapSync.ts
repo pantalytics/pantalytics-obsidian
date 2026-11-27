@@ -1072,6 +1072,20 @@ export class KnapSync {
 	}
 
 	/**
+	 * Where one note stands: whether the cloud vault holds it, why it would
+	 * not sync if it would not, whether it is waiting to be tried again, and
+	 * whether work for it is queued here. The corner's panel says this about the open
+	 * note; it is facts only, and the words are `history/cornerPanel.ts`'s.
+	 */
+	noteSync(path: string): { inCloud: boolean; stuck: string | null; retrying: boolean; pending: boolean } {
+		const clean = normalize(path);
+		const tree = this.client?.tree();
+		const inCloud = tree ? tree.docIdFor(clean) !== null : false;
+		const own = this.binding?.noteSync(clean) ?? { stuck: null, retrying: false, pending: false };
+		return { inCloud, ...own };
+	}
+
+	/**
 	 * Take the link down and bring it straight back up.
 	 *
 	 * What the button under Problem and Offline does. The failure count lives

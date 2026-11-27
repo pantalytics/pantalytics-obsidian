@@ -215,15 +215,3 @@ export function lastChange(
 			: person || (newest.device ?? "").trim() || "Someone";
 	return { who, when: ago(newest.ts * 1000, now) };
 }
-
-/**
- * The corner's first line: the word, and when the vault was last up to date.
- * *Up to date, just now* while it is; *Offline, since 14:02* while it is not;
- * the word alone when it has not been up to date since Obsidian started.
- */
-export function statusLine(word: string, upToDateAt: number, now: number, upToDate: boolean): string {
-	if (upToDate) return `${word}, just now`;
-	if (!upToDateAt) return word;
-	const when = dayStart(upToDateAt) === dayStart(now) ? clock(upToDateAt) : shortDate(upToDateAt, now);
-	return `${word}, since ${when}`;
-}
