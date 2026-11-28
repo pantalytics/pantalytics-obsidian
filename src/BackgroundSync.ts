@@ -10,7 +10,7 @@ import type { Subscriber, Unsubscriber } from "./observable/Observable";
 import { ObservableSet } from "./observable/ObservableSet";
 import { ObservableMap } from "./observable/ObservableMap";
 import type { SharedFolder, SharedFolders } from "./SharedFolder";
-import { compareFilePaths } from "./FolderSort";
+import { openFirst } from "./FolderSort";
 import type { ClientToken } from "./client/types";
 import { Canvas } from "./Canvas";
 import { areObjectsEqual } from "./areObjectsEqual";
@@ -76,6 +76,10 @@ export class BackgroundSync extends HasLogging {
 	public syncGroups = new ObservableMap<SharedFolder, SyncGroup>();
 
 	private syncQueue: QueueItem[] = [];
+	/** The notes open on screen, as Obsidian names them; see `prioritize`. */
+	private openPaths = new Set<string>();
+	/** Open notes first, then path order. */
+	private order = openFirst((path) => this.openPaths.has(path));
 	private downloadQueue: QueueItem[] = [];
 	private isProcessingSync = false;
 	private isProcessingDownloads = false;
@@ -605,10 +609,25 @@ export class BackgroundSync extends HasLogging {
 		});
 
 		this.syncQueue.push(queueItem);
-		this.syncQueue.sort(compareFilePaths);
+		this.syncQueue.sort(this.order);
 		void this.processSyncQueue();
 
 		return syncPromise;
+	}
+
+	/**
+	 * Move the notes open on screen to the front of both queues.
+	 *
+	 * Called every time a note is opened or the layout changes, so a note
+	 * opened halfway through a first sync jumps ahead of the rest instead of
+	 * waiting its turn.
+	 */
+	prioritize(openPaths: Iterable<string>): void {
+		this.openPaths = new Set(openPaths);
+		this.syncQueue.sort(this.order);
+		this.downloadQueue.sort(this.order);
+		void this.processSyncQueue();
+		void this.processDownloadQueue();
 	}
 
 	/**
@@ -681,7 +700,7 @@ export class BackgroundSync extends HasLogging {
 
 		// Add to the queue and start processing
 		this.downloadQueue.push(queueItem);
-		this.downloadQueue.sort(compareFilePaths);
+		this.downloadQueue.sort(this.order);
 		void this.processDownloadQueue();
 
 		return downloadPromise;
@@ -720,7 +739,7 @@ export class BackgroundSync extends HasLogging {
 
 		// Sort items by path for consistent sync order
 		const sortedDocs = [...docs, ...canvases, ...syncFiles].sort(
-			compareFilePaths,
+			this.order,
 		);
 
 
@@ -784,7 +803,7 @@ export class BackgroundSync extends HasLogging {
 		});
 
 		this.syncQueue.push(queueItem);
-		this.syncQueue.sort(compareFilePaths);
+		this.syncQueue.sort(this.order);
 		void this.processSyncQueue();
 
 		return syncPromise;
