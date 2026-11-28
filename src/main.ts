@@ -1951,12 +1951,14 @@ export default class Live extends Plugin {
 			this.app.workspace.on("file-open", (file) => {
 				workspaceLog("file-open");
 				void plugin._liveViews.refresh("file-open");
+				plugin.prioritizeOpenNotes();
 			}),
 		);
 
 		this.registerEvent(
 			this.app.workspace.on("layout-change", () => {
 				workspaceLog("layout-change");
+				this.prioritizeOpenNotes();
 				void this._liveViews.refresh("layout-change");
 			}),
 		);
@@ -2270,6 +2272,20 @@ export default class Live extends Plugin {
 
 	async saveKnapLink(value: KnapLink | null): Promise<void> {
 		await this.settings.update((settings) => ({ ...settings, knap: value }));
+	}
+
+	/**
+	 * Tell the sync queues which notes are on screen, so those go first.
+	 * Every leaf, not only the active one: a note in a split is open too.
+	 */
+	prioritizeOpenNotes(): void {
+		if (!this.backgroundSync) return;
+		const open: string[] = [];
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const file = (leaf.view as { file?: TFile | null }).file;
+			if (file) open.push(file.path);
+		});
+		this.backgroundSync.prioritize(open);
 	}
 
 	onunload() {
